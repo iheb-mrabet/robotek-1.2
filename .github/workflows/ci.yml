@@ -1,0 +1,180 @@
+name: ROS 2 CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ros-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI_IMAGE: ghcr.io/${{ github.repository }}-ci:jazzy
+  PYTHON_COVERAGE_MIN: "85"
+
+jobs:
+  fast-gate:
+    name: Fast gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Lint Python, C++, and shell
+        run: bash scripts/lint.sh
+
+      - name: Validate robot safety configuration
+        run: bash scripts/validate_config.sh
+
+  unit-tests:
+    name: Unit tests
+    needs: fast-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build ROS 2 workspace
+        run: bash scripts/build.sh
+
+      - name: Run C++ and Python unit tests
+        run: bash scripts/unit_tests.sh
+
+      - name: Enforce Python coverage threshold
+        run: bash scripts/python_coverage.sh
+
+      - name: Upload colcon test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-results-${{ github.run_id }}
+          path: |
+            build/**/test_results/**/*.xml
+            log/latest_test/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Python coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-coverage-${{ github.run_id }}
+          path: reports/coverage/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  integration-tests:
+    name: Integration tests
+    if: github.event_name != 'pull_request'
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run ROS integration test tier
+        run: bash scripts/integration_tests.sh
+
+      - name: Upload integration results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-results-${{ github.run_id }}
+          path: |
+            build/**/test_results/**/*.xml
+            log/latest_test/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  simulation-tests:
+    name: Headless Gazebo tests
+    if: github.event_name != 'pull_request'
+    needs: integration-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      QT_QPA_PLATFORM: offscreen
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run 180-second headless Gazebo tier
+        run: bash scripts/simulation_tests.sh
+
+      - name: Upload simulation results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulation-test-results-${{ github.run_id }}
+          path: |
+            build/**/test_results/**/*.xml
+            log/latest_test/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  ci-gate:
+    name: Aggregated CI gate
+    if: always()
+    needs: [fast-gate, unit-tests, integration-tests, simulation-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Evaluate all CI tiers
+        env:
+          FAST_GATE_RESULT: ${{ needs.fast-gate.result }}
+          UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
+          INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
+          SIMULATION_RESULT: ${{ needs.simulation-tests.result }}
+          REQUIRE_POST_MERGE: ${{ github.event_name != 'pull_request' }}
+        run: bash scripts/ci_gate.sh

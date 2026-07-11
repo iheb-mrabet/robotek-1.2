@@ -1,0 +1,13 @@
+services:
+  mock-delivery-robot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: mock-delivery-robot:jazzy
+    working_dir: /workspace/mock-delivery-robot
+    environment:
+      - ROS_DOMAIN_ID=42
+      - GZ_SIM_RESOURCE_PATH=/workspace/mock-delivery-robot/install
+    volumes:
+      - ..:/workspace/mock-delivery-robot
+    command: bash

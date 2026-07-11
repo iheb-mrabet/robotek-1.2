@@ -1,0 +1,33 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = [
+  "src/mock_robot_behavior",
+  "src/mock_robot_system_tests",
+  "scripts",
+]
+exclude = ["build", "install", "log", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+
+[tool.coverage.run]
+branch = true
+source = [
+  "mock_robot_behavior.mission_state_machine",
+  "mock_robot_behavior.mission_validation",
+]
+omit = ["*/test/*", "*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85

@@ -1,0 +1,35 @@
+rules:
+  - id: python-dangerous-eval
+    languages: [python]
+    severity: ERROR
+    message: Avoid eval(); it can execute attacker-controlled Python code.
+    pattern: eval(...)
+
+  - id: python-dangerous-exec
+    languages: [python]
+    severity: ERROR
+    message: Avoid exec(); it can execute attacker-controlled Python code.
+    pattern: exec(...)
+
+  - id: python-subprocess-shell-true
+    languages: [python]
+    severity: ERROR
+    message: shell=True can enable command injection. Use an argument list without a shell.
+    pattern-either:
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: subprocess.call(..., shell=True, ...)
+      - pattern: subprocess.Popen(..., shell=True, ...)
+
+  - id: python-unsafe-yaml-load
+    languages: [python]
+    severity: ERROR
+    message: Use yaml.safe_load() instead of yaml.load().
+    pattern: yaml.load(...)
+
+  - id: python-pickle-deserialization
+    languages: [python]
+    severity: ERROR
+    message: Avoid deserializing untrusted pickle data.
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)

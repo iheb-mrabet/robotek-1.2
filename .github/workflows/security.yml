@@ -1,0 +1,165 @@
+name: ROS 2 Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "15 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ros-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI_IMAGE: ghcr.io/${{ github.repository }}-ci:jazzy
+
+jobs:
+  secret-scan:
+    name: Gitleaks full-history scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout complete Git history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan committed history for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  sast:
+    name: Python and C++ SAST
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run Semgrep and cppcheck
+        run: bash scripts/security_sast.sh
+
+  trivy-filesystem:
+    name: Trivy repository scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Scan repository dependencies and configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-filesystem.txt
+
+      - name: Upload filesystem scan report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-filesystem-${{ github.run_id }}
+          path: trivy-filesystem.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  trivy-image:
+    name: Trivy CI image scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan ROS/apt packages in the CI image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.CI_IMAGE }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-image.txt
+
+      - name: Upload image scan report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-image-${{ github.run_id }}
+          path: trivy-image.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  exception-policy:
+    name: Security exception policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: ghcr.io/${{ github.repository }}-ci:jazzy
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate dated and owned exceptions
+        run: bash scripts/validate_security_exceptions.sh
+
+  security-gate:
+    name: Aggregated security gate
+    if: always()
+    needs: [secret-scan, sast, trivy-filesystem, trivy-image, exception-policy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Evaluate security jobs
+        env:
+          SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
+          SAST_RESULT: ${{ needs.sast.result }}
+          TRIVY_FS_RESULT: ${{ needs.trivy-filesystem.result }}
+          TRIVY_IMAGE_RESULT: ${{ needs.trivy-image.result }}
+          POLICY_RESULT: ${{ needs.exception-policy.result }}
+        run: bash scripts/security_gate.sh

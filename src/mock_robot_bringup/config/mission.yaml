@@ -1,0 +1,7 @@
+mission_manager:
+  ros__parameters:
+    use_sim_time: true
+    mission_timeout: 30.0
+    goal_tolerance: 0.15
+    status_rate_hz: 2.0
+    max_abs_coordinate: 4.5

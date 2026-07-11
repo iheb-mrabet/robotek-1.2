@@ -1,0 +1,13 @@
+exceptions: []
+
+# A temporary exception must use this structure:
+# - id: SEC-EXC-2026-001
+#   tool: trivy
+#   rule: CVE-YYYY-NNNN
+#   path: docker/Dockerfile
+#   reason: "Clear technical justification of the accepted risk."
+#   owner: "@repository-owner"
+#   approved_by: "@security-reviewer"
+#   created_on: "2026-07-11"
+#   expires_on: "2026-08-10"
+#   ticket: "https://github.com/OWNER/REPOSITORY/issues/123"

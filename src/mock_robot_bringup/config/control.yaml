@@ -1,0 +1,29 @@
+waypoint_controller:
+  ros__parameters:
+    use_sim_time: true
+    target_topic: /mission/target
+    odom_topic: /odom
+    output_topic: /cmd_vel_requested
+    control_rate_hz: 20.0
+    goal_tolerance: 0.15
+    linear_gain: 0.8
+    angular_gain: 1.8
+    heading_slowdown_angle: 0.8
+    max_linear_velocity: 0.5
+    max_angular_velocity: 1.0
+    max_linear_acceleration: 0.75
+    max_angular_acceleration: 1.5
+
+safety_controller:
+  ros__parameters:
+    use_sim_time: true
+    input_topic: /cmd_vel_requested
+    output_topic: /cmd_vel
+    scan_topic: /scan
+    emergency_stop_topic: /emergency_stop
+    obstacle_warning_distance: 0.7
+    obstacle_stop_distance: 0.35
+    max_linear_velocity: 0.5
+    max_angular_velocity: 1.0
+    max_linear_acceleration: 0.75
+    max_angular_acceleration: 1.5
