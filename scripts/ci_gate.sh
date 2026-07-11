@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 for variable in FAST_GATE_RESULT UNIT_TESTS_RESULT; do
   result="${!variable:-missing}"
