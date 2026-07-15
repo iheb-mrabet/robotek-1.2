@@ -26,7 +26,3 @@
 - Dated, owned, separately approved, expiring security exceptions.
 - One aggregated security gate suitable for branch protection.
 - Blocked-PR demo instructions for secret and vulnerable dependency/image cases.
-
-## Phase 3: documented limitation
-
-- C++ CodeQL is not enabled in this phase. ADR 0002 documents why cppcheck is the current gate and what it cannot detect.
