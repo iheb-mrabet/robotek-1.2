@@ -61,12 +61,12 @@ jobs:
           tags: ${{ env.LOCAL_IMAGE }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
-
           cache-from: type=gha,scope=runtime-image
           cache-to: type=gha,mode=max,scope=runtime-image
 
       - name: Validate runtime image
-        run: bash scripts/validate_runtime_image.sh "${LOCAL_IMAGE}"
+        run: |
+          bash scripts/validate_runtime_image.sh "${LOCAL_IMAGE}"
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -91,9 +91,58 @@ jobs:
             docker push "${tag}"
           done <<< "${TAGS}"
 
+      - name: Capture published image digest
+        id: published
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PRIMARY_TAG="$(
+            printf '%s\n' "${TAGS}" |
+            sed '/^[[:space:]]*$/d' |
+            head -n 1
+          )"
+
+          if [[ -z "${PRIMARY_TAG}" ]]; then
+            echo "No published image tag was generated." >&2
+            exit 1
+          fi
+
+          DIGEST="$(
+            docker buildx imagetools inspect "${PRIMARY_TAG}" |
+            awk '/^Digest:/ {print $2; exit}'
+          )"
+
+          if [[ -z "${DIGEST}" ]]; then
+            echo "Could not determine the published image digest." >&2
+            exit 1
+          fi
+
+          echo "Primary tag: ${PRIMARY_TAG}"
+          echo "Digest: ${DIGEST}"
+
+          echo "image=${REGISTRY}/${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "reference=${REGISTRY}/${IMAGE_NAME}@${DIGEST}" \
+            >> "${GITHUB_OUTPUT}"
+
+      - name: Generate delivery metadata
+        run: |
+          bash scripts/generate_delivery_metadata.sh \
+            "${{ steps.published.outputs.image }}" \
+            "${{ steps.published.outputs.digest }}" \
+            "${GITHUB_REF_NAME}"
+
+      - name: Display delivery metadata
+        run: |
+          cat reports/delivery/metadata.json
+
       - name: Delivery summary
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
         shell: bash
         run: |
           {
@@ -101,9 +150,23 @@ jobs:
             echo
             echo "Hadolint passed."
             echo "Runtime-image validation passed."
+            echo "Runtime image was published successfully."
             echo
-            echo "Published tags:"
+            echo "### Published tags"
+            echo
             echo '```text'
             printf '%s\n' "${TAGS}"
+            echo '```'
+            echo
+            echo "### Immutable image"
+            echo
+            echo '```text'
+            echo "${IMAGE_REFERENCE}"
+            echo '```'
+            echo
+            echo "### Delivery metadata"
+            echo
+            echo '```text'
+            echo "reports/delivery/metadata.json"
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
