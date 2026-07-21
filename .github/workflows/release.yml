@@ -1,0 +1,105 @@
+name: Verified Runtime Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+
+concurrency:
+  group: verified-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ROS 2 CI Gate
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+    permissions:
+      contents: read
+      packages: read
+
+  security:
+    name: ROS 2 Security Gate
+    uses: ./.github/workflows/security.yml
+    secrets: inherit
+
+    permissions:
+      contents: read
+      packages: read
+
+  delivery:
+    name: Verified Runtime Delivery
+
+    needs:
+      - ci
+      - security
+
+    if: >-
+      ${{
+        needs.ci.result == 'success' &&
+        needs.security.result == 'success'
+      }}
+
+    uses: ./.github/workflows/build-package.yml
+    secrets: inherit
+
+    permissions:
+      contents: read
+      packages: write
+
+  release-gate:
+    name: Final Release Gate
+    if: always()
+
+    needs:
+      - ci
+      - security
+      - delivery
+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Evaluate release pipeline
+        env:
+          CI_RESULT: ${{ needs.ci.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+          DELIVERY_RESULT: ${{ needs.delivery.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Verified Runtime Release"
+            echo
+            echo "| Gate | Result |"
+            echo "|---|---|"
+            echo "| ROS 2 CI | ${CI_RESULT} |"
+            echo "| ROS 2 Security | ${SECURITY_RESULT} |"
+            echo "| Runtime Delivery | ${DELIVERY_RESULT} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${CI_RESULT}" != "success" ]]; then
+            echo "Release blocked because ROS 2 CI failed." >&2
+            exit 1
+          fi
+
+          if [[ "${SECURITY_RESULT}" != "success" ]]; then
+            echo "Release blocked because ROS 2 Security failed." >&2
+            exit 1
+          fi
+
+          if [[ "${DELIVERY_RESULT}" != "success" ]]; then
+            echo "Release blocked because runtime delivery failed or was skipped." >&2
+            exit 1
+          fi
+
+          echo "All release gates passed."

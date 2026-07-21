@@ -1,108 +1,281 @@
-name: Verified Runtime Release
+cd /workspaces/robotek-1.2
+
+cat > .github/workflows/build-package.yml <<'EOF'
+name: Runtime Image Delivery
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*.*.*"
+  workflow_call:
 
-  workflow_dispatch:
-
-concurrency:
-  group: verified-release-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-runtime
+  LOCAL_IMAGE: robotek-runtime:ci
 
 jobs:
-  ci:
-    name: ROS 2 CI Gate
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
-    permissions:
-      contents: read
-      packages: read
-
-  security:
-    name: ROS 2 Security Gate
-    uses: ./.github/workflows/security.yml
-    secrets: inherit
-
-    permissions:
-      contents: read
-      packages: read
-
-  delivery:
-    name: Verified Runtime Delivery
-
-    needs:
-      - ci
-      - security
-
-    if: >-
-      ${{
-        needs.ci.result == 'success' &&
-        needs.security.result == 'success'
-      }}
-
-    uses: ./.github/workflows/build-package.yml
-    secrets: inherit
+  build-validate-publish:
+    name: Build, Validate and Publish Runtime Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-
-  release-gate:
-    name: Final Release Gate
-    if: always()
-
-    needs:
-      - ci
-      - security
-      - delivery
-
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
 
     steps:
-      - name: Evaluate release pipeline
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Check Dockerfiles with Hadolint
+        run: bash scripts/hadolint.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Generate image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+          flavor: |
+            latest=auto
+
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build runtime image locally
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile.runtime
+          load: true
+          push: false
+          pull: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=gha,scope=runtime-image
+          cache-to: type=gha,mode=max,scope=runtime-image
+
+      - name: Validate runtime image
+        run: |
+          bash scripts/validate_runtime_image.sh "${LOCAL_IMAGE}"
+
+      - name: Prepare delivery evidence directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/delivery
+
+      - name: Generate pre-publication Trivy JSON report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scan-type: image
+          scanners: vuln
+          format: json
+          output: reports/delivery/trivy-runtime.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Generate pre-publication Trivy text report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scan-type: image
+          scanners: vuln
+          format: table
+          output: reports/delivery/trivy-runtime.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Upload pre-publication scan evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-prepublish-scan-${{ github.run_number }}
+          path: |
+            reports/delivery/trivy-runtime.json
+            reports/delivery/trivy-runtime.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce vulnerability policy before publication
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          scan-type: image
+          scanners: vuln
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish validated image tags
         env:
-          CI_RESULT: ${{ needs.ci.result }}
-          SECURITY_RESULT: ${{ needs.security.result }}
-          DELIVERY_RESULT: ${{ needs.delivery.result }}
+          TAGS: ${{ steps.meta.outputs.tags }}
         shell: bash
         run: |
           set -euo pipefail
 
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+
+            echo "Publishing ${tag}"
+
+            docker tag "${LOCAL_IMAGE}" "${tag}"
+            docker push "${tag}"
+          done <<< "${TAGS}"
+
+      - name: Capture published image digest
+        id: published
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PRIMARY_TAG="$(
+            printf '%s\n' "${TAGS}" |
+            sed '/^[[:space:]]*$/d' |
+            head -n 1
+          )"
+
+          if [[ -z "${PRIMARY_TAG}" ]]; then
+            echo "No published image tag was generated." >&2
+            exit 1
+          fi
+
+          DIGEST="$(
+            docker buildx imagetools inspect "${PRIMARY_TAG}" |
+            awk '/^Digest:/ {print $2; exit}'
+          )"
+
+          if [[ -z "${DIGEST}" ]]; then
+            echo "Could not determine the published image digest." >&2
+            exit 1
+          fi
+
+          echo "Primary tag: ${PRIMARY_TAG}"
+          echo "Digest: ${DIGEST}"
+
+          echo "image=${REGISTRY}/${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "reference=${REGISTRY}/${IMAGE_NAME}@${DIGEST}" \
+            >> "${GITHUB_OUTPUT}"
+
+      - name: Generate delivery metadata
+        run: |
+          bash scripts/generate_delivery_metadata.sh \
+            "${{ steps.published.outputs.image }}" \
+            "${{ steps.published.outputs.digest }}" \
+            "${GITHUB_REF_NAME}"
+
+      - name: Display delivery metadata
+        run: |
+          cat reports/delivery/metadata.json
+
+      - name: Install Syft
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sSfL https://get.anchore.io/syft |
+            sudo sh -s -- \
+              -b /usr/local/bin \
+              v1.44.0
+
+          syft version
+
+      - name: Generate runtime image SBOMs
+        env:
+          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          syft "registry:${IMAGE_REFERENCE}" \
+            -o spdx-json=reports/delivery/sbom.spdx.json \
+            -o cyclonedx-json=reports/delivery/sbom.cyclonedx.json
+
+          test -s reports/delivery/sbom.spdx.json
+          test -s reports/delivery/sbom.cyclonedx.json
+
+      - name: Generate evidence checksums
+        run: |
+          bash scripts/generate_checksums.sh reports/delivery
+
+      - name: Display generated evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Generated delivery evidence:"
+
+          find reports/delivery \
+            -maxdepth 1 \
+            -type f \
+            -printf '%f\n' |
+            sort
+
+          echo
+          echo "Checksums:"
+          cat reports/delivery/SHA256SUMS
+
+      - name: Upload runtime delivery evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-delivery-evidence-${{ github.run_number }}
+          path: reports/delivery/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Delivery summary
+        if: always()
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
           {
-            echo "## Verified Runtime Release"
+            echo "## Runtime Image Delivery"
             echo
-            echo "| Gate | Result |"
-            echo "|---|---|"
-            echo "| ROS 2 CI | ${CI_RESULT} |"
-            echo "| ROS 2 Security | ${SECURITY_RESULT} |"
-            echo "| Runtime Delivery | ${DELIVERY_RESULT} |"
+            echo "Workflow result: ${JOB_STATUS}"
+            echo
+            echo "### Generated tags"
+            echo
+            echo '```text'
+            printf '%s\n' "${TAGS}"
+            echo '```'
+            echo
+
+            if [[ -n "${IMAGE_REFERENCE}" ]]; then
+              echo "### Published immutable image"
+              echo
+              echo '```text'
+              echo "${IMAGE_REFERENCE}"
+              echo '```'
+            else
+              echo "The image was not published because a validation or security gate failed."
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
-
-          if [[ "${CI_RESULT}" != "success" ]]; then
-            echo "Release blocked because ROS 2 CI failed." >&2
-            exit 1
-          fi
-
-          if [[ "${SECURITY_RESULT}" != "success" ]]; then
-            echo "Release blocked because ROS 2 Security failed." >&2
-            exit 1
-          fi
-
-          if [[ "${DELIVERY_RESULT}" != "success" ]]; then
-            echo "Release blocked because runtime delivery failed or was skipped." >&2
-            exit 1
-          fi
-
-          echo "All release gates passed."
+EOF
