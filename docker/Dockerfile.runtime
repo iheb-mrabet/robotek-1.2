@@ -2,10 +2,6 @@
 
 ARG ROS_DISTRO=jazzy
 
-# ============================================================
-# Builder stage
-# Compiles the ROS 2 workspace.
-# ============================================================
 FROM ros:${ROS_DISTRO}-ros-base AS builder
 
 ARG ROS_DISTRO
@@ -28,6 +24,8 @@ COPY src ./src
 
 RUN rosdep update \
     && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        linux-libc-dev \
     && rosdep install \
         --from-paths src \
         --ignore-src \
@@ -45,11 +43,6 @@ RUN rosdep update \
         log \
         /var/lib/apt/lists/*
 
-
-# ============================================================
-# Runtime stage
-# Contains only runtime dependencies and compiled robot files.
-# ============================================================
 FROM ros:${ROS_DISTRO}-ros-core AS runtime
 
 ARG ROS_DISTRO
@@ -66,7 +59,6 @@ ENV ROS_DISTRO=${ROS_DISTRO} \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install rosdep temporarily to resolve runtime dependencies.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         python3-rosdep \
@@ -74,11 +66,12 @@ RUN apt-get update \
 
 RUN rosdep init 2>/dev/null || true
 
-# Source files are copied temporarily only so rosdep can inspect package.xml.
 COPY src /tmp/robot-src
 
 RUN rosdep update \
     && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        linux-libc-dev \
     && rosdep install \
         --from-paths /tmp/robot-src \
         --ignore-src \
@@ -92,15 +85,16 @@ RUN rosdep update \
         /tmp/robot-src \
         /var/lib/apt/lists/*
 
-# Copy only the compiled workspace from the builder stage.
 COPY --from=builder /opt/robot /opt/robot
 
-# Add the runtime startup script.
-COPY docker/runtime-entrypoint.sh /usr/local/bin/runtime-entrypoint.sh
+COPY docker/runtime-entrypoint.sh \
+    /usr/local/bin/runtime-entrypoint.sh
 
-# Create a non-root runtime user.
-RUN chmod 0755 /usr/local/bin/runtime-entrypoint.sh \
-    && groupadd --gid "${USER_GID}" "${USERNAME}" \
+RUN chmod 0755 \
+        /usr/local/bin/runtime-entrypoint.sh \
+    && groupadd \
+        --gid "${USER_GID}" \
+        "${USERNAME}" \
     && useradd \
         --uid "${USER_UID}" \
         --gid "${USER_GID}" \

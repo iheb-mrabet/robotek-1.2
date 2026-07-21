@@ -2,11 +2,16 @@ name: ROS 2 Security
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
   push:
-    branches: [main]
+    branches:
+      - main
+
   schedule:
     - cron: "15 4 * * 1"
+
   workflow_dispatch:
 
 permissions:
@@ -19,6 +24,8 @@ concurrency:
 
 env:
   CI_IMAGE: ghcr.io/${{ github.repository }}-ci:jazzy
+  SEMGREP_IMAGE: semgrep/semgrep:1.170.0
+  SECURITY_CI_IMAGE: robotek-ci:security
 
 jobs:
   secret-scan:
@@ -42,12 +49,7 @@ jobs:
   sast:
     name: Python and C++ SAST
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    container:
-      image: ghcr.io/${{ github.repository }}-ci:jazzy
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -55,8 +57,55 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run Semgrep and cppcheck
-        run: bash scripts/security_sast.sh
+      - name: Run Semgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --volume "${GITHUB_WORKSPACE}:/src" \
+            --workdir /src \
+            "${SEMGREP_IMAGE}" \
+            semgrep scan \
+              --config security/semgrep.yml \
+              --error \
+              --metrics=off \
+              --disable-version-check \
+              --exclude='build/**' \
+              --exclude='install/**' \
+              --exclude='log/**' \
+              src/mock_robot_behavior \
+              src/mock_robot_system_tests
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run cppcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}:/workspace" \
+            --workdir /workspace \
+            --entrypoint /bin/bash \
+            "${CI_IMAGE}" \
+            -lc '
+              cppcheck \
+                --enable=warning,style,performance,portability \
+                --error-exitcode=1 \
+                --inline-suppr \
+                --std=c++17 \
+                -Isrc/mock_robot_control/include \
+                src/mock_robot_control/src \
+                src/mock_robot_control/test
+            '
 
   trivy-filesystem:
     name: Trivy repository scan
@@ -93,23 +142,39 @@ jobs:
   trivy-image:
     name: Trivy CI image scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
 
     steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
-      - name: Scan ROS/apt packages in the CI image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build current CI image candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          push: false
+          pull: true
+          tags: ${{ env.SECURITY_CI_IMAGE }}
+          cache-from: type=gha,scope=security-ci-image
+          cache-to: type=gha,mode=max,scope=security-ci-image
+          provenance: false
+
+      - name: Scan ROS and apt packages in CI image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.CI_IMAGE }}
+          image-ref: ${{ env.SECURITY_CI_IMAGE }}
+          scan-type: image
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          vuln-type: os,library
           exit-code: "1"
           format: table
           output: trivy-image.txt
@@ -127,6 +192,7 @@ jobs:
     name: Security exception policy
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+
     container:
       image: ghcr.io/${{ github.repository }}-ci:jazzy
       credentials:
@@ -145,7 +211,13 @@ jobs:
   security-gate:
     name: Aggregated security gate
     if: always()
-    needs: [secret-scan, sast, trivy-filesystem, trivy-image, exception-policy]
+    needs:
+      - secret-scan
+      - sast
+      - trivy-filesystem
+      - trivy-image
+      - exception-policy
+
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
