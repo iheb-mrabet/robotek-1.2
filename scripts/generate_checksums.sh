@@ -4,23 +4,34 @@ set -euo pipefail
 REPORT_DIR="${1:-reports/delivery}"
 
 FILES=(
+  image-reference.txt
   metadata.json
   sbom.spdx.json
   sbom.cyclonedx.json
   trivy-runtime.json
   trivy-runtime.txt
+  attestations.json
+  provenance.attestation.json
+  sbom.attestation.json
+  cosign-verification.json
+  cosign-identity.txt
+  github-provenance-verification.json
+  github-sbom-verification.json
 )
 
 for file in "${FILES[@]}"; do
-  if [[ ! -f "${REPORT_DIR}/${file}" ]]; then
-    echo "Missing delivery evidence file: ${REPORT_DIR}/${file}" >&2
+  if [[ ! -s "${REPORT_DIR}/${file}" ]]; then
+    echo "Missing or empty delivery evidence file: ${REPORT_DIR}/${file}" >&2
     exit 1
   fi
 done
 
 (
   cd "${REPORT_DIR}"
-  sha256sum "${FILES[@]}" > SHA256SUMS
+
+  sha256sum \
+    "${FILES[@]}" \
+    > SHA256SUMS
 )
 
 echo "Generated ${REPORT_DIR}/SHA256SUMS"

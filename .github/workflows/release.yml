@@ -36,7 +36,7 @@ jobs:
       packages: read
 
   delivery:
-    name: Verified Runtime Delivery
+    name: Signed and Attested Runtime Delivery
 
     needs:
       - ci
@@ -54,6 +54,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
   release-gate:
     name: Final Release Gate
@@ -84,7 +86,7 @@ jobs:
             echo "|---|---|"
             echo "| ROS 2 CI | ${CI_RESULT} |"
             echo "| ROS 2 Security | ${SECURITY_RESULT} |"
-            echo "| Runtime Delivery | ${DELIVERY_RESULT} |"
+            echo "| Signed runtime delivery | ${DELIVERY_RESULT} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ "${CI_RESULT}" != "success" ]]; then
@@ -98,7 +100,7 @@ jobs:
           fi
 
           if [[ "${DELIVERY_RESULT}" != "success" ]]; then
-            echo "Release blocked because runtime delivery failed or was skipped." >&2
+            echo "Release blocked because signed runtime delivery failed or was skipped." >&2
             exit 1
           fi
 
