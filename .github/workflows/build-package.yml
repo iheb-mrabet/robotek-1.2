@@ -138,7 +138,8 @@ jobs:
       - name: Display delivery metadata
         run: |
           cat reports/delivery/metadata.json
-            - name: Install Syft
+
+      - name: Install Syft
         shell: bash
         run: |
           set -euo pipefail
@@ -232,6 +233,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           exit-code: 1
+
       - name: Delivery summary
         if: always()
         env:
@@ -258,9 +260,14 @@ jobs:
             echo "${IMAGE_REFERENCE}"
             echo '```'
             echo
-            echo "### Delivery metadata"
+            echo "### Delivery evidence"
             echo
             echo '```text'
-            echo "reports/delivery/metadata.json"
+            echo "metadata.json"
+            echo "sbom.spdx.json"
+            echo "sbom.cyclonedx.json"
+            echo "trivy-runtime.json"
+            echo "trivy-runtime.txt"
+            echo "SHA256SUMS"
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
