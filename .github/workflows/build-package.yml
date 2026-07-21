@@ -222,9 +222,11 @@ jobs:
 
           syft version
 
-      - name: Generate complete runtime SBOMs
+      - name: Generate package-focused runtime SBOMs
         env:
           IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
+          SYFT_FILE_METADATA_SELECTION: none
+          SYFT_RELATIONSHIPS_PACKAGE_FILE_OWNERSHIP: "false"
         shell: bash
         run: |
           set -euo pipefail
@@ -242,13 +244,48 @@ jobs:
           jq empty \
             reports/delivery/sbom.cyclonedx.json
 
-          echo "Generated SBOM sizes:"
+          FILE_COMPONENTS="$(
+            jq '
+              [
+                .components[]?
+                | select(.type == "file")
+              ]
+              | length
+            ' \
+              reports/delivery/sbom.cyclonedx.json
+          )"
+
+          PACKAGE_COMPONENTS="$(
+            jq '
+              [
+                .components[]?
+                | select(.type != "file")
+              ]
+              | length
+            ' \
+              reports/delivery/sbom.cyclonedx.json
+          )"
+
+          echo "Package components: ${PACKAGE_COMPONENTS}"
+          echo "File components: ${FILE_COMPONENTS}"
+
+          if (( PACKAGE_COMPONENTS == 0 )); then
+            echo "The CycloneDX SBOM contains no package components." >&2
+            exit 1
+          fi
+
+          if (( FILE_COMPONENTS != 0 )); then
+            echo "File components were unexpectedly included in the SBOM." >&2
+            exit 1
+          fi
+
+          echo "Generated package-focused SBOM sizes:"
 
           du -h \
             reports/delivery/sbom.spdx.json \
             reports/delivery/sbom.cyclonedx.json
 
-      - name: Prepare compact CycloneDX attestation SBOM
+      - name: Prepare validated CycloneDX attestation SBOM
         id: attestation-sbom
         shell: bash
         run: |
@@ -267,7 +304,8 @@ jobs:
           jq -e '
             .bomFormat == "CycloneDX" and
             (.specVersion | type == "string") and
-            (.components | type == "array")
+            (.components | type == "array") and
+            (.components | length > 0)
           ' \
             "${OUTPUT}" \
             > /dev/null
@@ -282,14 +320,20 @@ jobs:
               "${OUTPUT}"
           )"
 
+          COMPONENT_COUNT="$(
+            jq '.components | length' \
+              "${OUTPUT}"
+          )"
+
           PREDICATE_TYPE="https://cyclonedx.org/bom/v${SPEC_VERSION}"
 
           echo "CycloneDX specification: ${SPEC_VERSION}"
           echo "Predicate type: ${PREDICATE_TYPE}"
-          echo "Compact SBOM size: ${SBOM_SIZE} bytes"
+          echo "Component count: ${COMPONENT_COUNT}"
+          echo "Attestation SBOM size: ${SBOM_SIZE} bytes"
 
           if (( SBOM_SIZE > MAX_SIZE_BYTES )); then
-            echo "Compact SBOM exceeds the 16 MiB attestation limit." >&2
+            echo "CycloneDX SBOM exceeds the 16 MiB attestation limit." >&2
             exit 1
           fi
 
@@ -299,16 +343,21 @@ jobs:
           echo "size_bytes=${SBOM_SIZE}" \
             >> "${GITHUB_OUTPUT}"
 
+          echo "component_count=${COMPONENT_COUNT}" \
+            >> "${GITHUB_OUTPUT}"
+
           jq -n \
             --arg format "CycloneDX" \
             --arg specification "${SPEC_VERSION}" \
             --arg predicate_type "${PREDICATE_TYPE}" \
             --argjson size_bytes "${SBOM_SIZE}" \
+            --argjson component_count "${COMPONENT_COUNT}" \
             '{
               format: $format,
               specification: $specification,
               predicate_type: $predicate_type,
-              size_bytes: $size_bytes
+              size_bytes: $size_bytes,
+              component_count: $component_count
             }' \
             > reports/delivery/sbom-attestation-info.json
 
@@ -493,7 +542,6 @@ jobs:
       - name: Promote verified image to final tags
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
         shell: bash
         run: |
           set -euo pipefail
@@ -505,9 +553,12 @@ jobs:
 
             echo "Promoting verified image to ${tag}"
 
-            docker buildx imagetools create \
-              --tag "${tag}" \
-              "${IMAGE_REFERENCE}"
+            docker tag \
+              "${LOCAL_IMAGE}" \
+              "${tag}"
+
+            docker push \
+              "${tag}"
 
             printf '%s\n' \
               "${tag}" \
@@ -584,6 +635,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload failed delivery diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failed-runtime-delivery-diagnostics-${{ github.run_number }}
+          path: reports/delivery/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Delivery summary
         if: always()
         env:
@@ -631,6 +691,6 @@ jobs:
             fi
 
             if [[ "${JOB_STATUS}" != "success" ]]; then
-              echo "Final release tags were not promoted unless all verification stages completed successfully."
+              echo "Final release tags were not promoted because one or more verification stages failed."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
