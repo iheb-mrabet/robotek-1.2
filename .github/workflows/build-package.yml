@@ -138,8 +138,102 @@ jobs:
       - name: Display delivery metadata
         run: |
           cat reports/delivery/metadata.json
+            - name: Install Syft
+        shell: bash
+        run: |
+          set -euo pipefail
 
+          curl -sSfL https://get.anchore.io/syft |
+            sudo sh -s -- \
+              -b /usr/local/bin \
+              v1.44.0
+
+          syft version
+
+      - name: Generate runtime image SBOMs
+        env:
+          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p reports/delivery
+
+          syft "registry:${IMAGE_REFERENCE}" \
+            -o spdx-json=reports/delivery/sbom.spdx.json \
+            -o cyclonedx-json=reports/delivery/sbom.cyclonedx.json
+
+          test -s reports/delivery/sbom.spdx.json
+          test -s reports/delivery/sbom.cyclonedx.json
+
+          echo "SPDX and CycloneDX SBOMs generated."
+
+      - name: Generate Trivy JSON report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.published.outputs.reference }}
+          scan-type: image
+          format: json
+          output: reports/delivery/trivy-runtime.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Generate Trivy text report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.published.outputs.reference }}
+          scan-type: image
+          format: table
+          output: reports/delivery/trivy-runtime.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 0
+
+      - name: Generate evidence checksums
+        run: |
+          bash scripts/generate_checksums.sh reports/delivery
+
+      - name: Display generated evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Generated delivery evidence:"
+
+          find reports/delivery \
+            -maxdepth 1 \
+            -type f \
+            -printf '%f\n' |
+            sort
+
+          echo
+          echo "Checksums:"
+          cat reports/delivery/SHA256SUMS
+
+      - name: Upload runtime delivery evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-delivery-evidence-${{ github.run_number }}
+          path: reports/delivery/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce runtime vulnerability policy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.published.outputs.reference }}
+          scan-type: image
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: 1
       - name: Delivery summary
+        if: always()
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
