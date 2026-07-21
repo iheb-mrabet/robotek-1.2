@@ -1,6 +1,3 @@
-cd /workspaces/robotek-1.2
-
-cat > .github/workflows/build-package.yml <<'EOF'
 name: Runtime Image Delivery
 
 on:
@@ -278,4 +275,3 @@ jobs:
               echo "The image was not published because a validation or security gate failed."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
-EOF
