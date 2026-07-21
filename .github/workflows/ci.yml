@@ -2,12 +2,15 @@ name: ROS 2 CI
 
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+    branches:
+      - main
+
   schedule:
     - cron: "30 2 * * *"
+
   workflow_dispatch:
+
+  workflow_call:
 
 permissions:
   contents: read
@@ -26,6 +29,7 @@ jobs:
     name: Fast gate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+
     container:
       image: ghcr.io/${{ github.repository }}-ci:jazzy
       credentials:
@@ -49,6 +53,7 @@ jobs:
     needs: fast-gate
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+
     container:
       image: ghcr.io/${{ github.repository }}-ci:jazzy
       credentials:
@@ -96,6 +101,7 @@ jobs:
     needs: unit-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+
     container:
       image: ghcr.io/${{ github.repository }}-ci:jazzy
       credentials:
@@ -128,9 +134,11 @@ jobs:
     needs: integration-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+
     env:
       LIBGL_ALWAYS_SOFTWARE: "1"
       QT_QPA_PLATFORM: offscreen
+
     container:
       image: ghcr.io/${{ github.repository }}-ci:jazzy
       credentials:
@@ -160,7 +168,13 @@ jobs:
   ci-gate:
     name: Aggregated CI gate
     if: always()
-    needs: [fast-gate, unit-tests, integration-tests, simulation-tests]
+
+    needs:
+      - fast-gate
+      - unit-tests
+      - integration-tests
+      - simulation-tests
+
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
