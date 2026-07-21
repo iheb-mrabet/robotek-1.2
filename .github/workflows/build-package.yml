@@ -325,7 +325,7 @@ jobs:
               "${OUTPUT}"
           )"
 
-          PREDICATE_TYPE="https://cyclonedx.org/bom/v${SPEC_VERSION}"
+          PREDICATE_TYPE="https://cyclonedx.org/bom"
 
           echo "CycloneDX specification: ${SPEC_VERSION}"
           echo "Predicate type: ${PREDICATE_TYPE}"
