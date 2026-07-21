@@ -70,6 +70,12 @@ jobs:
         run: |
           bash scripts/validate_runtime_image.sh "${LOCAL_IMAGE}"
 
+      - name: Prepare delivery evidence directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/delivery
+
       - name: Generate pre-publication Trivy JSON report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -176,7 +182,6 @@ jobs:
 
           echo "image=${REGISTRY}/${IMAGE_NAME}" >> "${GITHUB_OUTPUT}"
           echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
-
           echo "reference=${REGISTRY}/${IMAGE_NAME}@${DIGEST}" \
             >> "${GITHUB_OUTPUT}"
 
@@ -209,8 +214,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          mkdir -p reports/delivery
 
           syft "registry:${IMAGE_REFERENCE}" \
             -o spdx-json=reports/delivery/sbom.spdx.json \
