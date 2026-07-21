@@ -4,10 +4,14 @@ set -euo pipefail
 REPORT_DIR="${1:-reports/delivery}"
 
 FILES=(
+  candidate-reference.txt
   image-reference.txt
+  published-tags.txt
   metadata.json
   sbom.spdx.json
   sbom.cyclonedx.json
+  sbom.attestation.cyclonedx.json
+  sbom-attestation-info.json
   trivy-runtime.json
   trivy-runtime.txt
   attestations.json

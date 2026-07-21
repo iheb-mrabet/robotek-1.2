@@ -10,9 +10,9 @@ env:
 
 jobs:
   build-validate-publish:
-    name: Build, Validate, Sign and Publish Runtime Image
-    runs-on: ubuntu-latest
-    timeout-minutes: 75
+    name: Build, Validate, Sign, Attest and Publish Runtime Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Generate image tags and labels
+      - name: Generate final image tags and labels
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -49,6 +49,7 @@ jobs:
 
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Build runtime image locally
         uses: docker/build-push-action@v7
@@ -65,13 +66,18 @@ jobs:
           cache-to: type=gha,mode=max,scope=runtime-image
 
       - name: Validate runtime image
+        shell: bash
         run: |
-          bash scripts/validate_runtime_image.sh "${LOCAL_IMAGE}"
+          set -euo pipefail
+
+          bash scripts/validate_runtime_image.sh \
+            "${LOCAL_IMAGE}"
 
       - name: Prepare delivery evidence directory
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p reports/delivery
 
       - name: Generate pre-publication Trivy JSON report
@@ -111,7 +117,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Enforce vulnerability policy before publication
+      - name: Enforce vulnerability policy before registry upload
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.LOCAL_IMAGE }}
@@ -130,76 +136,79 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish validated image tags
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
+      - name: Push secure candidate image
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
 
-          while IFS= read -r tag; do
-            [[ -z "${tag}" ]] && continue
+          IMAGE="${REGISTRY}/${IMAGE_NAME}"
 
-            echo "Publishing ${tag}"
+          CANDIDATE_TAG="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 
-            docker tag "${LOCAL_IMAGE}" "${tag}"
-            docker push "${tag}"
-          done <<< "${TAGS}"
+          echo "Pushing validated candidate:"
+          echo "${CANDIDATE_TAG}"
 
-      - name: Capture published image digest
-        id: published
-        env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-        shell: bash
-        run: |
-          set -euo pipefail
+          docker tag \
+            "${LOCAL_IMAGE}" \
+            "${CANDIDATE_TAG}"
 
-          PRIMARY_TAG="$(
-            printf '%s\n' "${TAGS}" |
-            sed '/^[[:space:]]*$/d' |
-            head -n 1
-          )"
-
-          if [[ -z "${PRIMARY_TAG}" ]]; then
-            echo "No published image tag was generated." >&2
-            exit 1
-          fi
+          docker push \
+            "${CANDIDATE_TAG}"
 
           DIGEST="$(
-            docker buildx imagetools inspect "${PRIMARY_TAG}" |
+            docker buildx imagetools inspect \
+              "${CANDIDATE_TAG}" |
             awk '/^Digest:/ {print $2; exit}'
           )"
 
           if [[ -z "${DIGEST}" ]]; then
-            echo "Could not determine the published image digest." >&2
+            echo "Could not determine candidate digest." >&2
             exit 1
           fi
 
-          IMAGE="${REGISTRY}/${IMAGE_NAME}"
-          REFERENCE="${IMAGE}@${DIGEST}"
+          if [[ ! "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid image digest: ${DIGEST}" >&2
+            exit 1
+          fi
 
-          echo "Primary tag: ${PRIMARY_TAG}"
-          echo "Image: ${IMAGE}"
-          echo "Digest: ${DIGEST}"
-          echo "Immutable reference: ${REFERENCE}"
+          IMAGE_REFERENCE="${IMAGE}@${DIGEST}"
 
-          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
-          echo "reference=${REFERENCE}" >> "${GITHUB_OUTPUT}"
+          echo "Candidate tag: ${CANDIDATE_TAG}"
+          echo "Immutable reference: ${IMAGE_REFERENCE}"
 
-          printf '%s\n' "${REFERENCE}" \
+          echo "image=${IMAGE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          echo "digest=${DIGEST}" \
+            >> "${GITHUB_OUTPUT}"
+
+          echo "reference=${IMAGE_REFERENCE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          echo "candidate_tag=${CANDIDATE_TAG}" \
+            >> "${GITHUB_OUTPUT}"
+
+          printf '%s\n' \
+            "${CANDIDATE_TAG}" \
+            > reports/delivery/candidate-reference.txt
+
+          printf '%s\n' \
+            "${IMAGE_REFERENCE}" \
             > reports/delivery/image-reference.txt
 
       - name: Generate delivery metadata
+        shell: bash
         run: |
+          set -euo pipefail
+
           bash scripts/generate_delivery_metadata.sh \
-            "${{ steps.published.outputs.image }}" \
-            "${{ steps.published.outputs.digest }}" \
+            "${{ steps.candidate.outputs.image }}" \
+            "${{ steps.candidate.outputs.digest }}" \
             "${GITHUB_REF_NAME}"
 
       - name: Display delivery metadata
-        run: |
-          cat reports/delivery/metadata.json
+        run: cat reports/delivery/metadata.json
 
       - name: Install Syft
         shell: bash
@@ -213,9 +222,9 @@ jobs:
 
           syft version
 
-      - name: Generate runtime image SBOMs
+      - name: Generate complete runtime SBOMs
         env:
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
         shell: bash
         run: |
           set -euo pipefail
@@ -227,6 +236,82 @@ jobs:
           test -s reports/delivery/sbom.spdx.json
           test -s reports/delivery/sbom.cyclonedx.json
 
+          jq empty \
+            reports/delivery/sbom.spdx.json
+
+          jq empty \
+            reports/delivery/sbom.cyclonedx.json
+
+          echo "Generated SBOM sizes:"
+
+          du -h \
+            reports/delivery/sbom.spdx.json \
+            reports/delivery/sbom.cyclonedx.json
+
+      - name: Prepare compact CycloneDX attestation SBOM
+        id: attestation-sbom
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SOURCE="reports/delivery/sbom.cyclonedx.json"
+
+          OUTPUT="reports/delivery/sbom.attestation.cyclonedx.json"
+
+          MAX_SIZE_BYTES=16777216
+
+          jq -c . \
+            "${SOURCE}" \
+            > "${OUTPUT}"
+
+          jq -e '
+            .bomFormat == "CycloneDX" and
+            (.specVersion | type == "string") and
+            (.components | type == "array")
+          ' \
+            "${OUTPUT}" \
+            > /dev/null
+
+          SBOM_SIZE="$(
+            stat -c '%s' \
+              "${OUTPUT}"
+          )"
+
+          SPEC_VERSION="$(
+            jq -r '.specVersion' \
+              "${OUTPUT}"
+          )"
+
+          PREDICATE_TYPE="https://cyclonedx.org/bom/v${SPEC_VERSION}"
+
+          echo "CycloneDX specification: ${SPEC_VERSION}"
+          echo "Predicate type: ${PREDICATE_TYPE}"
+          echo "Compact SBOM size: ${SBOM_SIZE} bytes"
+
+          if (( SBOM_SIZE > MAX_SIZE_BYTES )); then
+            echo "Compact SBOM exceeds the 16 MiB attestation limit." >&2
+            exit 1
+          fi
+
+          echo "predicate_type=${PREDICATE_TYPE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          echo "size_bytes=${SBOM_SIZE}" \
+            >> "${GITHUB_OUTPUT}"
+
+          jq -n \
+            --arg format "CycloneDX" \
+            --arg specification "${SPEC_VERSION}" \
+            --arg predicate_type "${PREDICATE_TYPE}" \
+            --argjson size_bytes "${SBOM_SIZE}" \
+            '{
+              format: $format,
+              specification: $specification,
+              predicate_type: $predicate_type,
+              size_bytes: $size_bytes
+            }' \
+            > reports/delivery/sbom-attestation-info.json
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
 
@@ -235,7 +320,7 @@ jobs:
 
       - name: Sign immutable runtime image with Cosign
         env:
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
         shell: bash
         run: |
           set -euo pipefail
@@ -248,24 +333,25 @@ jobs:
         id: provenance
         uses: actions/attest@v4
         with:
-          subject-name: ${{ steps.published.outputs.image }}
-          subject-digest: ${{ steps.published.outputs.digest }}
+          subject-name: ${{ steps.candidate.outputs.image }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
           push-to-registry: true
           create-storage-record: false
 
-      - name: Generate SPDX SBOM attestation
+      - name: Generate CycloneDX SBOM attestation
         id: sbom-attestation
         uses: actions/attest@v4
         with:
-          subject-name: ${{ steps.published.outputs.image }}
-          subject-digest: ${{ steps.published.outputs.digest }}
-          sbom-path: reports/delivery/sbom.spdx.json
+          subject-name: ${{ steps.candidate.outputs.image }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          sbom-path: reports/delivery/sbom.attestation.cyclonedx.json
           push-to-registry: true
           create-storage-record: false
 
       - name: Store attestation evidence
         env:
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
+          SBOM_PREDICATE_TYPE: ${{ steps.attestation-sbom.outputs.predicate_type }}
           PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
           PROVENANCE_URL: ${{ steps.provenance.outputs.attestation-url }}
           SBOM_BUNDLE: ${{ steps.sbom-attestation.outputs.bundle-path }}
@@ -289,24 +375,34 @@ jobs:
             --arg image_reference "${IMAGE_REFERENCE}" \
             --arg provenance_url "${PROVENANCE_URL}" \
             --arg sbom_url "${SBOM_URL}" \
+            --arg sbom_predicate_type "${SBOM_PREDICATE_TYPE}" \
             '{
               image_reference: $image_reference,
-              provenance_attestation: $provenance_url,
-              sbom_attestation: $sbom_url
+              provenance_attestation: {
+                url: $provenance_url
+              },
+              sbom_attestation: {
+                url: $sbom_url,
+                predicate_type: $sbom_predicate_type
+              }
             }' \
             > reports/delivery/attestations.json
 
       - name: Verify Cosign signature
         env:
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
         shell: bash
         run: |
           set -euo pipefail
 
           RELEASE_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}"
+
           DELIVERY_IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build-package.yml@${GITHUB_REF}"
+
           OIDC_ISSUER="https://token.actions.githubusercontent.com"
+
           REPORT="reports/delivery/cosign-verification.json"
+
           IDENTITY_REPORT="reports/delivery/cosign-identity.txt"
 
           if cosign verify \
@@ -316,7 +412,8 @@ jobs:
             "${IMAGE_REFERENCE}" \
             > "${REPORT}"; then
 
-            printf '%s\n' "${RELEASE_IDENTITY}" \
+            printf '%s\n' \
+              "${RELEASE_IDENTITY}" \
               > "${IDENTITY_REPORT}"
 
           elif cosign verify \
@@ -326,7 +423,8 @@ jobs:
             "${IMAGE_REFERENCE}" \
             > "${REPORT}"; then
 
-            printf '%s\n' "${DELIVERY_IDENTITY}" \
+            printf '%s\n' \
+              "${DELIVERY_IDENTITY}" \
               > "${IDENTITY_REPORT}"
 
           else
@@ -336,12 +434,14 @@ jobs:
 
           test -s "${REPORT}"
           test -s "${IDENTITY_REPORT}"
+
           jq empty "${REPORT}"
 
       - name: Verify GitHub provenance and SBOM attestations
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
+          SBOM_PREDICATE_TYPE: ${{ steps.attestation-sbom.outputs.predicate_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -353,7 +453,7 @@ jobs:
             local attempt
 
             for attempt in 1 2 3 4 5 6; do
-              echo "Verification attempt ${attempt} for ${output_file}"
+              echo "Verification attempt ${attempt}: ${output_file}"
 
               if "$@" > "${output_file}"; then
                 test -s "${output_file}"
@@ -361,7 +461,7 @@ jobs:
               fi
 
               if [[ "${attempt}" -eq 6 ]]; then
-                echo "Attestation verification failed after ${attempt} attempts." >&2
+                echo "Attestation verification failed." >&2
                 return 1
               fi
 
@@ -381,7 +481,7 @@ jobs:
             gh attestation verify \
               "oci://${IMAGE_REFERENCE}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --predicate-type "https://spdx.dev/Document/v2.3" \
+              --predicate-type "${SBOM_PREDICATE_TYPE}" \
               --format json
 
           jq empty \
@@ -390,9 +490,62 @@ jobs:
           jq empty \
             reports/delivery/github-sbom-verification.json
 
+      - name: Promote verified image to final tags
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : > reports/delivery/published-tags.txt
+
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+
+            echo "Promoting verified image to ${tag}"
+
+            docker buildx imagetools create \
+              --tag "${tag}" \
+              "${IMAGE_REFERENCE}"
+
+            printf '%s\n' \
+              "${tag}" \
+              >> reports/delivery/published-tags.txt
+
+          done <<< "${TAGS}"
+
+          test -s reports/delivery/published-tags.txt
+
+      - name: Verify final tags resolve to signed digest
+        env:
+          EXPECTED_DIGEST: ${{ steps.candidate.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+
+            RESOLVED_DIGEST="$(
+              docker buildx imagetools inspect \
+                "${tag}" |
+              awk '/^Digest:/ {print $2; exit}'
+            )"
+
+            echo "${tag} -> ${RESOLVED_DIGEST}"
+
+            if [[ "${RESOLVED_DIGEST}" != "${EXPECTED_DIGEST}" ]]; then
+              echo "Final tag does not reference the verified digest." >&2
+              exit 1
+            fi
+
+          done < reports/delivery/published-tags.txt
+
       - name: Generate evidence checksums
         run: |
-          bash scripts/generate_checksums.sh reports/delivery
+          bash scripts/generate_checksums.sh \
+            reports/delivery
 
       - name: Verify evidence checksums
         shell: bash
@@ -400,7 +553,10 @@ jobs:
           set -euo pipefail
 
           cd reports/delivery
-          sha256sum --check SHA256SUMS
+
+          sha256sum \
+            --check \
+            SHA256SUMS
 
       - name: Display generated evidence
         shell: bash
@@ -417,6 +573,7 @@ jobs:
 
           echo
           echo "Checksums:"
+
           cat reports/delivery/SHA256SUMS
 
       - name: Upload signed runtime delivery evidence
@@ -431,18 +588,19 @@ jobs:
         if: always()
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
-          IMAGE_REFERENCE: ${{ steps.published.outputs.reference }}
+          IMAGE_REFERENCE: ${{ steps.candidate.outputs.reference }}
           PROVENANCE_URL: ${{ steps.provenance.outputs.attestation-url }}
           SBOM_URL: ${{ steps.sbom-attestation.outputs.attestation-url }}
           JOB_STATUS: ${{ job.status }}
         shell: bash
         run: |
           {
-            echo "## Signed Runtime Image Delivery"
+            echo "## Signed and Attested Runtime Image"
             echo
             echo "Workflow result: ${JOB_STATUS}"
             echo
-            echo "### Generated tags"
+
+            echo "### Requested final tags"
             echo
             echo '```text'
             printf '%s\n' "${TAGS}"
@@ -450,7 +608,7 @@ jobs:
             echo
 
             if [[ -n "${IMAGE_REFERENCE}" ]]; then
-              echo "### Published immutable image"
+              echo "### Immutable image"
               echo
               echo '```text'
               echo "${IMAGE_REFERENCE}"
@@ -466,13 +624,13 @@ jobs:
             fi
 
             if [[ -n "${SBOM_URL}" ]]; then
-              echo "### SBOM attestation"
+              echo "### CycloneDX SBOM attestation"
               echo
               echo "${SBOM_URL}"
               echo
             fi
 
-            if [[ -z "${IMAGE_REFERENCE}" ]]; then
-              echo "The image was not published because a validation or security gate failed."
+            if [[ "${JOB_STATUS}" != "success" ]]; then
+              echo "Final release tags were not promoted unless all verification stages completed successfully."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
