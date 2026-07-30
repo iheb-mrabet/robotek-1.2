@@ -193,8 +193,17 @@
 - Configured Argo CD to watch the personal repository `main` branch.
 - Enabled automated synchronization, pruning, self-healing, retry, and namespace creation.
 - Migrated deployment ownership from manual Helm commands to Argo CD.
-- Confirmed the final application state is `Synced` and `Healthy`.
-- Pinned staging to the immutable digest produced by the verified runtime release.
+- Pinned staging to an immutable digest produced by the verified runtime release.
+- Added the `promote-staging` job to `.github/workflows/release.yml`.
+- Run staging promotion only after CI, security, image signing, attestations, and final digest verification succeed.
+- Resolve the verified `ghcr.io/iheb-mrabet/robotek-1.2-runtime:main` digest after runtime delivery.
+- Update `deploy/helm/robotek/values-staging.yaml` automatically with the verified immutable digest.
+- Validate the promoted configuration with `helm lint`, `helm template`, and `git diff --check` before committing it.
+- Commit the desired-state update to `main` with `github-actions[bot]`.
+- Ignore digest-only promotion commits in the release trigger to prevent a recursive pipeline loop.
+- Let Argo CD detect the Git commit and reconcile the new image into K3s.
+- Confirm the automated promotion commit, Argo CD revision, deployed Pod image, and GHCR digest match.
+- Confirm the final Argo CD application state is `Synced` and `Healthy`.
 
 ### Rollback Demonstration
 - Introduced a deliberately invalid image digest through Git.
@@ -207,10 +216,12 @@
 - Added `scripts/deployment/verify_release.sh` for Argo CD, digest, readiness, and restart validation.
 - Added `scripts/deployment/smoke_test.sh` for ROS 2 node, topic, mission-status, and odometry validation.
 - Added `scripts/deployment/collect_evidence.sh` for deployment status, logs, events, resource usage, and checksums.
+- Validated the automatically promoted deployment end to end.
+- Confirmed the release verification and ROS 2 smoke test pass against the deployed immutable image.
 - Generated local deployment evidence for the completed staging run.
 
 ### Follow-up Hardening
-- Admission-time signature verification and automatic release-to-GitOps digest promotion remain future enhancements.
+- Admission-time signature and attestation enforcement remains a future enhancement.
 - Phase 5 rollback is Git-driven and demonstrated through `git revert`; policy-driven automatic rollback can be added later.
 
 ---
@@ -296,6 +307,6 @@ Deliver a **production-ready, reusable DevSecOps platform for ROS 2 robot softwa
 - Keyless image signing.
 - Build provenance and SBOM attestations.
 - Immutable and evidence-backed releases.
-- Controlled GitOps staging deployment and rollback.
+- Automated GitOps staging deployment and Git-driven rollback.
 - Runtime observability and security monitoring.
 - Easy adoption by multiple real-world robot repositories with minimal customization.
