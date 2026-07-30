@@ -1,0 +1,46 @@
+Robotek has been installed.
+
+Release:
+  {{ .Release.Name }}
+
+Namespace:
+  {{ .Release.Namespace }}
+
+Deployment:
+  {{ include "robotek.fullname" . }}
+
+Image:
+  {{ include "robotek.image" . }}
+
+Check the deployment:
+
+  kubectl get deployment \
+    {{ include "robotek.fullname" . }} \
+    --namespace {{ .Release.Namespace }}
+
+Check the Pod:
+
+  kubectl get pods \
+    --namespace {{ .Release.Namespace }} \
+    --selector app.kubernetes.io/instance={{ .Release.Name }}
+
+Follow Robotek logs:
+
+  kubectl logs \
+    --namespace {{ .Release.Namespace }} \
+    --selector app.kubernetes.io/instance={{ .Release.Name }} \
+    --follow
+
+Inspect ROS 2 nodes:
+
+  kubectl exec \
+    --namespace {{ .Release.Namespace }} \
+    deployment/{{ include "robotek.fullname" . }} \
+    -- ros2 node list
+
+Inspect ROS 2 topics:
+
+  kubectl exec \
+    --namespace {{ .Release.Namespace }} \
+    deployment/{{ include "robotek.fullname" . }} \
+    -- ros2 topic list

@@ -1,0 +1,77 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
+  tag: main
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+deployment:
+  strategy:
+    type: Recreate
+
+robot:
+  rosDomainId: 42
+
+  launch:
+    package: mock_robot_bringup
+    file: full_simulation.launch.py
+
+    arguments:
+      gui: "false"
+      use_sim_time: "true"
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podLabels:
+  app.kubernetes.io/component: robot-runtime
+  app.kubernetes.io/part-of: robotek
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+sharedMemory:
+  enabled: true
+  sizeLimit: 512Mi
+
+terminationGracePeriodSeconds: 30
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

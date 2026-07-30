@@ -1,0 +1,28 @@
+image:
+  repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
+
+  # Temporary mutable reference for the first learning deployment.
+  # This will later be replaced by the verified immutable digest.
+  tag: main
+  digest: ""
+
+  pullPolicy: Always
+
+robot:
+  rosDomainId: 42
+
+podLabels:
+  environment: staging
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+sharedMemory:
+  enabled: true
+  sizeLimit: 512Mi
