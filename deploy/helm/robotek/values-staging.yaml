@@ -1,7 +1,7 @@
 image:
   repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
   tag: main
-  digest: "sha256:b65d09bccc7cd5cacb083c00d6c00d2933466a445a4dd62c76c02ff08f42096f"
+  digest: "sha256:e8aaa9df0082db78273b9cf3bc036180e441863f7ef3aac6b68affc4bfe2f2e6"
   pullPolicy: IfNotPresent
 
 robot:
