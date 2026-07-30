@@ -150,40 +150,74 @@
 
 ---
 
-# ⏳ Phase 5 – Staging Deployment, Runtime Validation and Rollback
+# ✅ Phase 5 – Staging Deployment, Runtime Validation and Rollback
 
-**Status:** ⏳ **Not Started**
+**Status:** ✅ **Completed**
 
-## Planned
+## Completed
 
-### Staging Environment
-- Define a reproducible staging environment for the verified runtime image.
-- Deploy only an immutable, signed, and attested image digest.
-- Add controlled ROS 2 headless bring-up.
+### Staging Platform
+- Provisioned an Ubuntu 24.04 staging host on AWS EC2.
+- Installed a pinned K3s Kubernetes cluster with secrets encryption enabled.
+- Disabled unnecessary default K3s ingress and load-balancer components.
+- Installed Helm and deployed Argo CD into the cluster.
+- Kept the Argo CD API private and accessed it through local port forwarding and an SSH tunnel.
 
-### Deployment Validation
-- Add container and ROS 2 health checks.
-- Add deployment smoke tests.
-- Confirm required nodes, topics, services, and parameters after deployment.
-- Store deployment logs and validation evidence.
+### Helm Deployment Package
+- Created a reusable Helm application chart under `deploy/helm/robotek`.
+- Added a dedicated staging values file.
+- Deployed one complete ROS 2 and Gazebo simulation per Pod.
+- Used a `Recreate` deployment strategy to prevent duplicate robot simulations during updates.
+- Added a dedicated ServiceAccount without an automatically mounted Kubernetes API token.
+- Configured CPU and memory requests and limits.
+- Added an in-memory `/dev/shm` volume for Gazebo and ROS middleware.
 
-### Continuous Deployment
-- Trigger staging deployment only after a successful verified runtime release.
-- Add deployment concurrency protection.
-- Track deployed image digest and release metadata.
-- Prevent deployment of unsigned or unverified images.
+### Kubernetes Security Controls
+- Enforced non-root execution with UID and GID `1001`.
+- Disabled privilege escalation and privileged mode.
+- Dropped all Linux capabilities.
+- Enabled the `RuntimeDefault` seccomp profile.
+- Scanned the rendered Kubernetes manifests with Trivy.
+- Confirmed zero HIGH or CRITICAL Kubernetes misconfiguration findings.
 
-### Rollback
-- Automatically roll back when health checks or smoke tests fail.
-- Preserve the last known-good runtime digest.
-- Demonstrate and document a controlled rollback scenario.
-- Produce deployment and rollback evidence artifacts.
+### Runtime Validation
+- Added ROS-aware startup and readiness probes.
+- Validated `/mission/status` to confirm the mission layer is operational.
+- Validated `/odom` with best-effort QoS to confirm Gazebo and the ROS–Gazebo bridge are operational.
+- Confirmed expected ROS 2 nodes and topics inside the running Pod.
+- Confirmed mission status and odometry messages are published.
+- Verified successful deployment with zero container restarts.
+
+### GitOps Continuous Deployment
+- Added an Argo CD `Application` manifest under `deploy/argocd`.
+- Configured Argo CD to watch the personal repository `main` branch.
+- Enabled automated synchronization, pruning, self-healing, retry, and namespace creation.
+- Migrated deployment ownership from manual Helm commands to Argo CD.
+- Confirmed the final application state is `Synced` and `Healthy`.
+- Pinned staging to the immutable digest produced by the verified runtime release.
+
+### Rollback Demonstration
+- Introduced a deliberately invalid image digest through Git.
+- Observed the expected `ErrImagePull` and `ImagePullBackOff` failure.
+- Restored the last known-good digest with `git revert`.
+- Confirmed Argo CD automatically synchronized the reverted desired state.
+- Verified the restored Pod became ready with zero restarts.
+
+### Verification and Evidence Tooling
+- Added `scripts/deployment/verify_release.sh` for Argo CD, digest, readiness, and restart validation.
+- Added `scripts/deployment/smoke_test.sh` for ROS 2 node, topic, mission-status, and odometry validation.
+- Added `scripts/deployment/collect_evidence.sh` for deployment status, logs, events, resource usage, and checksums.
+- Generated local deployment evidence for the completed staging run.
+
+### Follow-up Hardening
+- Admission-time signature verification and automatic release-to-GitOps digest promotion remain future enhancements.
+- Phase 5 rollback is Git-driven and demonstrated through `git revert`; policy-driven automatic rollback can be added later.
 
 ---
 
 # ⏳ Phase 6 – Observability and Runtime Security
 
-**Status:** ⏳ **Not Started**
+**Status:** ⏳ **Next**
 
 ## Planned
 
@@ -202,7 +236,7 @@
 
 # ⏳ Phase 7 – Generic Multi-Robot Template and Final Demonstration
 
-**Status:** ⏳ **Not Started**
+**Status:** ⏳ **Planned**
 
 ## Planned
 
@@ -244,9 +278,9 @@
 | Phase 2 – CI Workflow | **100%** | ✅ Completed |
 | Phase 3 – Security Workflow | **100%** | ✅ Completed |
 | Phase 4 – Verified Runtime Delivery and Supply Chain Security | **100%** | ✅ Completed |
-| Phase 5 – Staging Deployment, Runtime Validation and Rollback | **0%** | ⏳ Not Started |
-| Phase 6 – Observability and Runtime Security | **0%** | ⏳ Not Started |
-| Phase 7 – Generic Multi-Robot Template and Final Demonstration | **0%** | ⏳ Not Started |
+| Phase 5 – Staging Deployment, Runtime Validation and Rollback | **100%** | ✅ Completed |
+| Phase 6 – Observability and Runtime Security | **0%** | ⏳ Next |
+| Phase 7 – Generic Multi-Robot Template and Final Demonstration | **0%** | ⏳ Planned |
 
 ---
 
@@ -262,6 +296,6 @@ Deliver a **production-ready, reusable DevSecOps platform for ROS 2 robot softwa
 - Keyless image signing.
 - Build provenance and SBOM attestations.
 - Immutable and evidence-backed releases.
-- Automated staging deployment and rollback.
+- Controlled GitOps staging deployment and rollback.
 - Runtime observability and security monitoring.
 - Easy adoption by multiple real-world robot repositories with minimal customization.
