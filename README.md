@@ -7,12 +7,14 @@
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros)
 ![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu)
 ![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-K3s-326CE5?logo=kubernetes)
+![Argo CD](https://img.shields.io/badge/GitOps-Argo%20CD-EF7B4D?logo=argo)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python)
 
-> A ROS 2 DevSecOps reference project demonstrating automated testing, security gates, verified container delivery, SBOM generation, keyless image signing, provenance attestations, and evidence-backed releases.
+> A ROS 2 DevSecOps reference project demonstrating automated testing, security gates, verified container delivery, SBOM generation, keyless image signing, provenance attestations, automatic GitOps staging promotion, Kubernetes deployment, runtime validation, and evidence-backed releases.
 
-Robotek 1.2 is a compact but realistic mock indoor delivery robot built for learning and demonstrating a professional robotics DevSecOps lifecycle. The repository combines ROS 2 application development with CI, security automation, container hardening, software supply-chain protection, and verified runtime image delivery.
+Robotek 1.2 is a compact but realistic mock indoor delivery robot built for learning and demonstrating a professional robotics DevSecOps lifecycle. The repository combines ROS 2 application development with CI, security automation, container hardening, software supply-chain protection, verified runtime image delivery, and automated deployment to a K3s staging cluster through Argo CD.
 
 ---
 
@@ -28,7 +30,7 @@ The robot is a differential-drive platform simulated with ROS 2 Jazzy and Gazebo
 - Support emergency-stop activation and release.
 - Publish mission state and execution results.
 
-The project is intentionally small enough to understand end to end, while still including the packages, tests, workflows, security controls, and release logic expected from a professional robot software repository.
+The project is intentionally small enough to understand end to end, while still including the packages, tests, workflows, security controls, release logic, GitOps configuration, deployment validation, and rollback procedures expected from a professional robot software repository.
 
 ---
 
@@ -40,8 +42,8 @@ The project is intentionally small enough to understand end to end, while still 
 | Phase 2 | ROS 2 CI workflow | ✅ Completed |
 | Phase 3 | Security workflow | ✅ Completed |
 | Phase 4 | Verified runtime delivery and supply-chain security | ✅ Completed |
-| Phase 5 | Staging deployment, validation, and rollback | ⏳ Next sprint |
-| Phase 6 | Observability and runtime security | ⏳ Planned |
+| Phase 5 | Staging deployment, runtime validation, GitOps promotion, and rollback | ✅ Completed |
+| Phase 6 | Observability and runtime security | ⏳ Next |
 | Phase 7 | Generic multi-robot template and final demonstration | ⏳ Planned |
 
 See the complete roadmap in [`docs/backlog.md`](docs/backlog.md).
@@ -66,10 +68,14 @@ See the complete roadmap in [`docs/backlog.md`](docs/backlog.md).
 | Signing | Cosign keyless signing |
 | Attestations | GitHub `actions/attest@v4` |
 | Registry | GitHub Container Registry (GHCR) |
+| Kubernetes | K3s |
+| Packaging | Helm |
+| GitOps | Argo CD |
+| Staging platform | Ubuntu 24.04 on AWS EC2 |
 
 ---
 
-## Robot architecture
+## Repository architecture
 
 ```text
 src/
@@ -86,69 +92,84 @@ src/
 ├── ci.yml                      Reusable ROS 2 CI workflow
 ├── security.yml                Reusable security workflow
 ├── build-package.yml           Reusable signed runtime delivery workflow
-└── release.yml                 Central verified release orchestrator
+└── release.yml                 Release orchestration and staging GitOps promotion
+
+deploy/
+├── helm/robotek/               Reusable Kubernetes Helm chart
+└── argocd/                     Argo CD staging Application manifest
 
 docker/
 ├── Dockerfile                  Development and CI image
 ├── Dockerfile.runtime          Production runtime image
 └── compose.yaml                Local container workflow
 
-scripts/                        Local and CI execution scripts
+scripts/
+└── deployment/
+    ├── verify_release.sh       Argo CD, digest, readiness, and restart validation
+    ├── smoke_test.sh           ROS 2 node, topic, mission, and odometry validation
+    └── collect_evidence.sh     Deployment evidence and checksums
+
 security/                       Semgrep and security-policy configuration
 docs/                           Backlog, verification, and project documentation
-reports/                        Generated coverage and delivery evidence
+reports/                        Generated coverage, delivery, and deployment evidence
 ```
 
 ---
 
-## DevSecOps architecture
+## End-to-end DevSecOps architecture
 
-The central `Verified Runtime Release` workflow coordinates the complete release path.
+The central `Verified Runtime Release` workflow coordinates the complete release and staging deployment path.
 
 ```text
-                         ┌──────────────────────┐
-Developer push or tag ──▶│ Verified Runtime     │
-                         │ Release orchestrator │
-                         └──────────┬───────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    │                               │
-                    ▼                               ▼
-           ┌────────────────┐              ┌─────────────────┐
-           │ ROS 2 CI Gate  │              │ Security Gate   │
-           └───────┬────────┘              └────────┬────────┘
-                   │                                │
-                   └───────────────┬────────────────┘
-                                   │ both must pass
-                                   ▼
-                      ┌─────────────────────────┐
-                      │ Runtime image delivery  │
-                      └────────────┬────────────┘
-                                   ▼
-                          Local runtime build
-                                   ▼
-                          Runtime validation
-                                   ▼
-                       Blocking Trivy image gate
-                                   ▼
-                       Temporary candidate image
-                                   ▼
-                         SPDX + CycloneDX SBOMs
-                                   ▼
-                         Cosign keyless signature
-                                   ▼
-                    Provenance + SBOM attestations
-                                   ▼
-                  Signature and attestation verification
-                                   ▼
-                     Promotion to final GHCR tags
-                                   ▼
-                     Digest and checksum verification
-                                   ▼
-                         Final release evidence
+Developer push to main
+        │
+        ├──────────────────────────────┐
+        ▼                              ▼
+  ROS 2 CI Gate                 Security Gate
+        │                              │
+        └──────────────┬───────────────┘
+                       │ both must pass
+                       ▼
+              Runtime image build
+                       ▼
+              Runtime validation
+                       ▼
+             Blocking Trivy gate
+                       ▼
+            Candidate image in GHCR
+                       ▼
+            SPDX + CycloneDX SBOMs
+                       ▼
+             Cosign keyless signing
+                       ▼
+        Provenance + SBOM attestations
+                       ▼
+       Signature and attestation checks
+                       ▼
+          Promotion to final GHCR tags
+                       ▼
+         Final-tag digest verification
+                       ▼
+        Resolve verified `main` digest
+                       ▼
+     Update `values-staging.yaml` in Git
+                       ▼
+          Helm lint and render checks
+                       ▼
+   Commit desired state with Actions bot
+                       ▼
+          Argo CD detects Git change
+                       ▼
+       K3s deploys immutable image digest
+                       ▼
+        Startup and readiness probes
+                       ▼
+         ROS 2 release and smoke tests
+                       ▼
+        Synced, Healthy staging release
 ```
 
-The runtime delivery job cannot begin unless both the CI gate and security gate return success.
+Runtime delivery cannot begin unless both the CI gate and security gate succeed. Staging promotion cannot begin unless the runtime image has been built, scanned, signed, attested, verified, and promoted successfully.
 
 ---
 
@@ -235,22 +256,11 @@ Syft generates:
 - CycloneDX JSON SBOM.
 - A package-focused CycloneDX document suitable for GitHub attestation.
 
-The SBOM records the packages, libraries, versions, and dependencies contained in the runtime image.
+### 6. Keyless signing and attestations
 
-### 6. Keyless signing
+Cosign signs the immutable runtime image digest using the GitHub Actions OIDC identity. The workflow also creates signed build-provenance and CycloneDX SBOM attestations.
 
-Cosign signs the immutable runtime image digest using the GitHub Actions OIDC identity. No long-lived private signing key is stored in the repository.
-
-### 7. GitHub attestations
-
-The workflow creates:
-
-- A signed build-provenance attestation.
-- A signed CycloneDX SBOM attestation.
-
-The provenance connects the image digest to the repository, workflow, commit, and build process that produced it.
-
-### 8. Verification before promotion
+### 7. Verification before promotion
 
 The workflow verifies:
 
@@ -261,19 +271,17 @@ The workflow verifies:
 
 Final tags are created only after these verifications succeed.
 
-### 9. Evidence-backed release
+### 8. Evidence-backed release
 
 The workflow produces and validates:
 
-- Immutable image reference.
-- Candidate image reference.
+- Immutable and candidate image references.
 - Published final tags.
 - Runtime metadata.
 - Trivy reports.
 - SPDX and CycloneDX SBOMs.
 - Cosign verification output.
-- Provenance attestation bundle.
-- SBOM attestation bundle.
+- Provenance and SBOM attestation bundles.
 - GitHub attestation-verification reports.
 - SHA256 checksums for the complete evidence package.
 
@@ -283,7 +291,7 @@ The evidence is uploaded as a GitHub Actions artifact for later review and audit
 
 ## Published runtime image
 
-The released product is the runtime container image stored in GitHub Container Registry:
+The released product is stored in GitHub Container Registry:
 
 ```text
 ghcr.io/iheb-mrabet/robotek-1.2-runtime
@@ -295,13 +303,83 @@ Supported final tags include:
 - `sha-<commit>`
 - Semantic versions such as `v1.0.0`, `1.0`, and `latest` when a matching release tag is pushed.
 
-For security-sensitive use, deploy the immutable digest rather than a movable tag:
+Security-sensitive deployments use the immutable digest rather than a movable tag:
 
 ```text
 ghcr.io/iheb-mrabet/robotek-1.2-runtime@sha256:<digest>
 ```
 
 See [`docs/runtime-image-verification.md`](docs/runtime-image-verification.md) for independent signature, provenance, SBOM, checksum, and runtime verification instructions.
+
+---
+
+## Automated GitOps staging deployment
+
+Phase 5 connects verified runtime delivery to the K3s staging cluster without giving GitHub Actions direct Kubernetes credentials.
+
+After the image-delivery job succeeds, the `promote-staging` job in [`release.yml`](.github/workflows/release.yml):
+
+1. Resolves the digest currently referenced by the verified GHCR `main` image.
+2. Validates that the value is a correctly formatted SHA-256 digest.
+3. Updates `deploy/helm/robotek/values-staging.yaml` with that immutable digest.
+4. Runs `helm lint`, `helm template`, and `git diff --check`.
+5. Commits the desired-state change to `main` using `github-actions[bot]`.
+6. Avoids a recursive release loop by ignoring digest-only promotion commits.
+7. Lets Argo CD detect the Git revision and reconcile the Helm release into K3s.
+
+The validated staging deployment reached:
+
+```text
+Argo CD sync: Synced
+Argo CD health: Healthy
+Deployment rollout: successful
+Pod readiness: 1/1
+Container restarts: 0
+Release verification: passed
+ROS 2 smoke test: passed
+```
+
+### Kubernetes controls
+
+The staging workload includes:
+
+- Non-root execution with UID and GID `1001`.
+- Privilege escalation disabled.
+- All Linux capabilities dropped.
+- `RuntimeDefault` seccomp profile.
+- Dedicated ServiceAccount without an automatically mounted API token.
+- CPU and memory requests and limits.
+- In-memory `/dev/shm` for Gazebo and ROS middleware.
+- ROS-aware startup and readiness probes for `/mission/status` and `/odom`.
+- `Recreate` deployment strategy to prevent simultaneous robot simulations.
+
+### Git-driven rollback
+
+Rollback was demonstrated by committing an invalid digest, observing `ErrImagePull` and `ImagePullBackOff`, and reverting the Git commit. Argo CD restored the last known-good desired state automatically.
+
+Admission-time signature and attestation enforcement, plus policy-driven automatic rollback, remain future hardening opportunities.
+
+---
+
+## Verify the staging release
+
+From a host configured to access the K3s cluster:
+
+```bash
+./scripts/deployment/verify_release.sh
+./scripts/deployment/smoke_test.sh
+./scripts/deployment/collect_evidence.sh
+```
+
+The verification scripts confirm:
+
+- Argo CD synchronization and health.
+- Deployed immutable image reference.
+- Pod readiness and restart count.
+- Expected ROS 2 nodes and topics.
+- Mission-status publication.
+- Odometry publication.
+- Deployment logs, events, resource data, and evidence checksums.
 
 ---
 
@@ -329,44 +407,15 @@ docker compose -f docker/compose.yaml run --rm mock-delivery-robot
 
 ---
 
-## Build
+## Build and test locally
 
 ```bash
 bash scripts/build.sh
-```
-
-Then source the workspace:
-
-```bash
 source install/setup.bash
-```
-
----
-
-## Test locally
-
-Run lint and formatting checks:
-
-```bash
 bash scripts/lint.sh
-```
-
-Run unit tests and coverage:
-
-```bash
 bash scripts/unit_tests.sh
 bash scripts/python_coverage.sh
-```
-
-Run ROS 2 integration tests:
-
-```bash
 bash scripts/integration_tests.sh
-```
-
-Run headless Gazebo tests:
-
-```bash
 bash scripts/simulation_tests.sh
 ```
 
@@ -441,7 +490,7 @@ bash scripts/clean.sh
 | `ci.yml` | Lint, build, unit tests, integration tests, Gazebo tests, aggregated CI gate |
 | `security.yml` | Secret scanning, SAST, vulnerability scanning, exception policy, aggregated security gate |
 | `build-package.yml` | Runtime build, validation, scanning, SBOM, signing, attestations, verification, GHCR promotion |
-| `release.yml` | Orchestrate CI, security, delivery, and the final release gate |
+| `release.yml` | Orchestrate CI, security, verified delivery, automatic staging digest promotion, and the final release gate |
 
 ---
 
@@ -451,23 +500,24 @@ bash scripts/clean.sh
 - [`docs/branch-protection.md`](docs/branch-protection.md) — recommended required checks and merge protection.
 - [`docs/runtime-image-verification.md`](docs/runtime-image-verification.md) — independent verification of released runtime images.
 - [`security/`](security/) — Semgrep and security-policy configuration.
-- [`scripts/`](scripts/) — reproducible local and CI commands.
+- [`scripts/deployment/`](scripts/deployment/) — staging verification, smoke testing, and evidence collection.
 
 ---
 
-## Next sprint: Phase 5
+## Next sprint: Phase 6
 
-The next phase focuses on controlled staging deployment and rollback:
+Phase 6 focuses on observability and runtime security:
 
-- Deploy the verified image by immutable digest.
-- Perform headless ROS 2 bring-up in staging.
-- Add health checks and deployment smoke tests.
-- Preserve deployment logs and evidence.
-- Prevent unsigned or unverified image deployment.
-- Roll back automatically to the last known-good digest when validation fails.
+- Add structured application and ROS 2 logs.
+- Collect runtime and Kubernetes resource metrics.
+- Build health and operational dashboards.
+- Add alerts for node availability, topic activity, CPU, memory, and container health.
+- Detect unexpected processes and runtime behavior.
+- Monitor security-relevant container and Kubernetes events.
+- Preserve incident-response and alert evidence.
 
 ---
 
 ## Final objective
 
-The long-term objective is to deliver a reusable, production-ready DevSecOps platform for ROS 2 robot software that supports automated testing, security-by-default, verified software supply chains, controlled deployment, runtime observability, rollback, and easy adoption across multiple robot repositories.
+The long-term objective is to deliver a reusable, production-ready DevSecOps platform for ROS 2 robot software that supports automated testing, security-by-default, verified software supply chains, automatic controlled GitOps deployment, runtime observability, rollback, and easy adoption across multiple robot repositories.
