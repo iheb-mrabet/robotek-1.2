@@ -66,6 +66,62 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 
+          {{- if .Values.healthProbes.startup.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /opt/ros/${ROS_DISTRO}/setup.bash
+                  source /opt/robot/setup.bash
+
+                  timeout 8 ros2 topic echo \
+                    /mission/status \
+                    --once \
+                    --no-daemon \
+                    >/dev/null 2>&1 &&
+
+                  timeout 8 ros2 topic echo \
+                    /odom \
+                    --once \
+                    --no-daemon \
+                    --qos-reliability best_effort \
+                    >/dev/null 2>&1
+            periodSeconds: {{ .Values.healthProbes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthProbes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthProbes.startup.failureThreshold }}
+            successThreshold: {{ .Values.healthProbes.startup.successThreshold }}
+          {{- end }}
+
+          {{- if .Values.healthProbes.readiness.enabled }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -lc
+                - |
+                  source /opt/ros/${ROS_DISTRO}/setup.bash
+                  source /opt/robot/setup.bash
+
+                  timeout 8 ros2 topic echo \
+                    /mission/status \
+                    --once \
+                    --no-daemon \
+                    >/dev/null 2>&1 &&
+
+                  timeout 8 ros2 topic echo \
+                    /odom \
+                    --once \
+                    --no-daemon \
+                    --qos-reliability best_effort \
+                    >/dev/null 2>&1
+            periodSeconds: {{ .Values.healthProbes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthProbes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthProbes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.healthProbes.readiness.successThreshold }}
+          {{- end }}
+
           {{- if .Values.sharedMemory.enabled }}
           volumeMounts:
             - name: shared-memory

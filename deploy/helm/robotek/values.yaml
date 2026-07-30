@@ -68,6 +68,21 @@ sharedMemory:
   enabled: true
   sizeLimit: 512Mi
 
+healthProbes:
+  startup:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 20
+    failureThreshold: 30
+    successThreshold: 1
+
+  readiness:
+    enabled: true
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 3
+    successThreshold: 1
+
 terminationGracePeriodSeconds: 30
 
 nodeSelector: {}
