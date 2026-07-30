@@ -57,6 +57,182 @@ jobs:
       id-token: write
       attestations: write
 
+  promote-staging:
+    name: Promote Verified Digest to Staging GitOps
+
+    needs:
+      - delivery
+
+    if: >-
+      ${{
+        github.ref == 'refs/heads/main' &&
+        needs.delivery.result == 'success'
+      }}
+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: write
+      packages: read
+
+    steps:
+      - name: Checkout current main branch
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve verified main image digest
+        id: image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}-runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DIGEST="$(
+            docker buildx imagetools inspect \
+              "${IMAGE}:main" |
+            awk '/^Digest:/ {print $2; exit}'
+          )"
+
+          if [[ ! "${DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Invalid verified image digest: ${DIGEST}" >&2
+            exit 1
+          fi
+
+          echo "Verified staging candidate: ${IMAGE}@${DIGEST}"
+          echo "digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "reference=${IMAGE}@${DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update staging image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("deploy/helm/robotek/values-staging.yaml")
+          digest = os.environ["IMAGE_DIGEST"]
+
+          if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+              raise SystemExit(f"Invalid digest: {digest}")
+
+          lines = path.read_text(encoding="utf-8").splitlines()
+          in_image = False
+          replacements = 0
+
+          for index, line in enumerate(lines):
+              if line == "image:":
+                  in_image = True
+                  continue
+
+              if in_image and line and not line.startswith(" "):
+                  in_image = False
+
+              if in_image and re.fullmatch(r"  digest:.*", line):
+                  lines[index] = f'  digest: "{digest}"'
+                  replacements += 1
+
+          if replacements != 1:
+              raise SystemExit(
+                  f"Expected exactly one image.digest field, found {replacements}"
+              )
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+          grep -F \
+            "digest: \"${IMAGE_DIGEST}\"" \
+            deploy/helm/robotek/values-staging.yaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5.0.0
+        with:
+          version: v3.21.1
+
+      - name: Validate promoted staging configuration
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          helm lint \
+            deploy/helm/robotek \
+            --values deploy/helm/robotek/values-staging.yaml
+
+          helm template \
+            robotek-staging \
+            deploy/helm/robotek \
+            --namespace robotek-staging \
+            --values deploy/helm/robotek/values-staging.yaml \
+            > /tmp/robotek-staging-rendered.yaml
+
+          grep -F \
+            "image: \"${IMAGE_REFERENCE}\"" \
+            /tmp/robotek-staging-rendered.yaml
+
+          git diff --check
+
+      - name: Commit GitOps digest promotion
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VALUES_FILE="deploy/helm/robotek/values-staging.yaml"
+
+          if git diff --quiet -- "${VALUES_FILE}"; then
+            echo "Staging already references ${IMAGE_DIGEST}; no commit required."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "${VALUES_FILE}"
+          git diff --cached --check
+
+          git commit \
+            -m "chore(deploy): promote staging image ${IMAGE_DIGEST}"
+
+          git push origin HEAD:main
+
+      - name: Promotion summary
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        shell: bash
+        run: |
+          {
+            echo "## Staging GitOps Promotion"
+            echo
+            echo "The verified runtime image was promoted to the staging desired state."
+            echo
+            echo '```text'
+            echo "${IMAGE_REFERENCE}"
+            echo '```'
+            echo
+            echo "Argo CD will detect the committed digest and reconcile the K3s staging deployment."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   release-gate:
     name: Final Release Gate
     if: always()
@@ -65,6 +241,7 @@ jobs:
       - ci
       - security
       - delivery
+      - promote-staging
 
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -75,6 +252,9 @@ jobs:
           CI_RESULT: ${{ needs.ci.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
           DELIVERY_RESULT: ${{ needs.delivery.result }}
+          PROMOTION_RESULT: ${{ needs.promote-staging.result }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
         shell: bash
         run: |
           set -euo pipefail
@@ -87,6 +267,7 @@ jobs:
             echo "| ROS 2 CI | ${CI_RESULT} |"
             echo "| ROS 2 Security | ${SECURITY_RESULT} |"
             echo "| Signed runtime delivery | ${DELIVERY_RESULT} |"
+            echo "| Staging GitOps promotion | ${PROMOTION_RESULT} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ "${CI_RESULT}" != "success" ]]; then
@@ -104,4 +285,11 @@ jobs:
             exit 1
           fi
 
-          echo "All release gates passed."
+          if [[ "${REF_TYPE}" == "branch" && "${REF_NAME}" == "main" ]]; then
+            if [[ "${PROMOTION_RESULT}" != "success" ]]; then
+              echo "Release blocked because staging GitOps promotion failed or was skipped." >&2
+              exit 1
+            fi
+          fi
+
+          echo "All required release gates passed."
