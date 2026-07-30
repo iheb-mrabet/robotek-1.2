@@ -1,12 +1,8 @@
 image:
   repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
-
-  # Temporary mutable reference for the first learning deployment.
-  # This will later be replaced by the verified immutable digest.
   tag: main
-  digest: ""
-
-  pullPolicy: Always
+  digest: "sha256:ce97910550f8306db1d29cc9f4d70a925bf6f6844f201f9ac5a52e302dc8ce69"
+  pullPolicy: IfNotPresent
 
 robot:
   rosDomainId: 42
