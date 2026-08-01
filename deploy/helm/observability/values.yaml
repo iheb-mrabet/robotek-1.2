@@ -1,0 +1,4 @@
+# Default values for the Robotek observability wrapper chart.
+# Environment-specific settings belong in values-staging.yaml.
+
+monitoring: {}
