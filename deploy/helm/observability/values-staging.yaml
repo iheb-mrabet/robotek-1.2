@@ -1,0 +1,170 @@
+monitoring:
+  fullnameOverride: robotek-monitoring
+
+  defaultRules:
+    create: true
+    rules:
+      etcd: false
+      kubeControllerManager: false
+      kubeProxy: false
+      kubeSchedulerAlerting: false
+      kubeSchedulerRecording: false
+
+  kubeEtcd:
+    enabled: false
+
+  kubeControllerManager:
+    enabled: false
+
+  kubeProxy:
+    enabled: false
+
+  kubeScheduler:
+    enabled: false
+
+  grafana:
+    enabled: true
+
+    admin:
+      existingSecret: robotek-grafana-admin
+      userKey: admin-user
+      passwordKey: admin-password
+
+    service:
+      type: ClusterIP
+
+    ingress:
+      enabled: false
+
+    persistence:
+      enabled: true
+      type: sts
+      storageClassName: local-path
+      accessModes:
+        - ReadWriteOnce
+      size: 2Gi
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+
+    sidecar:
+      dashboards:
+        enabled: true
+        searchNamespace: ALL
+      datasources:
+        enabled: true
+
+  prometheus:
+    enabled: true
+
+    service:
+      type: ClusterIP
+
+    ingress:
+      enabled: false
+
+    prometheusSpec:
+      replicas: 1
+      retention: 3d
+      retentionSize: 3GB
+      scrapeInterval: 30s
+      evaluationInterval: 30s
+
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+
+      resources:
+        requests:
+          cpu: 250m
+          memory: 512Mi
+        limits:
+          cpu: 750m
+          memory: 1536Mi
+
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: local-path
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi
+
+  alertmanager:
+    enabled: true
+
+    service:
+      type: ClusterIP
+
+    ingress:
+      enabled: false
+
+    alertmanagerSpec:
+      replicas: 1
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: local-path
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+
+  prometheusOperator:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 300m
+        memory: 384Mi
+
+  kube-state-metrics:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 96Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+  prometheus-node-exporter:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 150m
+        memory: 128Mi
+
+  kubeApiServer:
+    enabled: true
+
+  kubelet:
+    enabled: true
+
+  coreDns:
+    enabled: true
+
+  kubeStateMetrics:
+    enabled: true
+
+  nodeExporter:
+    enabled: true
