@@ -226,22 +226,53 @@
 
 ---
 
-# ⏳ Phase 6 – Observability and Runtime Security
+# 🚧 Phase 6 – Observability and Runtime Security
 
-**Status:** ⏳ **Next**
+**Status:** 🚧 **In Progress**
 
-## Planned
+## Design completed
 
-### Observability
-- Add structured application and ROS 2 logs.
-- Add runtime metrics and resource monitoring.
-- Add health dashboards and alerting.
-- Track node availability, topic activity, CPU, memory, and container health.
+- Added `docs/phase6-design.md` as the implementation blueprint.
+- Defined the Prometheus, Grafana, Alertmanager, kube-state-metrics, and node-exporter architecture.
+- Defined Kubernetes, K3s, and Argo CD metrics to collect.
+- Defined a ROS 2 Prometheus exporter for mission status, odometry freshness, node/topic availability, emergency-stop state, mission state, and startup duration.
+- Defined Git-provisioned Grafana dashboards and Prometheus alert rules.
+- Selected Falco for initial runtime detection.
+- Defined scheduled Trivy image and rendered-manifest scanning.
+- Designed automated post-deployment validation using the existing verification, smoke-test, and evidence scripts.
+- Deferred Terraform infrastructure automation until after Phase 6.
 
-### Runtime Security
-- Detect unexpected processes or runtime behavior.
-- Monitor container events and security-relevant failures.
-- Define alerting and incident-response evidence.
+## Current implementation task
+
+### Observability foundation
+- Capture the existing K3s node, Pod, storage, CPU, memory, and disk baseline.
+- Create a pinned `kube-prometheus-stack` Helm dependency.
+- Configure Prometheus, Grafana, Alertmanager, kube-state-metrics, and node-exporter for the single-node staging environment.
+- Keep all monitoring services private and access them through port forwarding.
+- Deploy the observability stack through a dedicated Argo CD Application.
+- Confirm all monitoring targets are available without destabilizing Robotek.
+
+## Planned next
+
+### Kubernetes and GitOps monitoring
+- Monitor Pod readiness, restart count, Deployment availability, Pending Pods, image-pull failures, CPU, memory, node readiness, and Argo CD synchronization/health.
+
+### Robotek-specific monitoring
+- Add a ROS 2 Prometheus exporter.
+- Monitor `/mission/status`, `/odom`, expected nodes/topics, emergency-stop state, mission state, and simulation startup duration.
+
+### Dashboards and alerts
+- Provision Grafana dashboards from Git.
+- Add and deliberately test platform, GitOps, and Robotek alert rules.
+
+### Runtime security
+- Deploy Falco and Robotek-specific detection rules.
+- Add scheduled Trivy runtime-image and rendered-manifest scans.
+
+### Automated post-deployment validation
+- Trigger verification after staging digest promotion.
+- Run `verify_release.sh`, `smoke_test.sh`, and `collect_evidence.sh`.
+- Upload timestamped evidence as a workflow artifact.
 
 ---
 
@@ -290,7 +321,7 @@
 | Phase 3 – Security Workflow | **100%** | ✅ Completed |
 | Phase 4 – Verified Runtime Delivery and Supply Chain Security | **100%** | ✅ Completed |
 | Phase 5 – Staging Deployment, Runtime Validation and Rollback | **100%** | ✅ Completed |
-| Phase 6 – Observability and Runtime Security | **0%** | ⏳ Next |
+| Phase 6 – Observability and Runtime Security | **5%** | 🚧 In Progress |
 | Phase 7 – Generic Multi-Robot Template and Final Demonstration | **0%** | ⏳ Planned |
 
 ---
