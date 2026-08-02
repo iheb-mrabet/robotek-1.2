@@ -59,7 +59,7 @@ spec:
             service: robotek
           annotations:
             summary: Robotek container restarted
-            description: Robotek container {{ $labels.container }} in Pod {{ $labels.pod }} restarted during the last fifteen minutes.
+            description: Robotek container {{ "{{" }} $labels.container {{ "}}" }} in Pod {{ "{{" }} $labels.pod {{ "}}" }} restarted during the last fifteen minutes.
 
         - alert: RobotekImagePullFailure
           expr: |
@@ -74,7 +74,7 @@ spec:
             service: robotek
           annotations:
             summary: Robotek image pull failure
-            description: Robotek container {{ $labels.container }} in Pod {{ $labels.pod }} cannot pull its configured image. Reason={{ $labels.reason }}.
+            description: Robotek container {{ "{{" }} $labels.container {{ "}}" }} in Pod {{ "{{" }} $labels.pod {{ "}}" }} cannot pull its configured image. Reason={{ "{{" }} $labels.reason {{ "}}" }}.
 
         - alert: RobotekArgoCDOutOfSync
           expr: |
