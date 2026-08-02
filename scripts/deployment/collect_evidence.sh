@@ -1,48 +1,125 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -u
 
 namespace="${1:-robotek-staging}"
 application="${2:-robotek-staging}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-output_directory="reports/deployment/${timestamp}"
+evidence_root="${EVIDENCE_ROOT:-reports/deployment}"
+output_directory="${evidence_root}/${timestamp}"
 
 mkdir -p "$output_directory"
 
-kubectl -n argocd get application "$application" \
-  -o jsonpath='Application: {.metadata.name}{"\n"}Sync: {.status.sync.status}{"\n"}Health: {.status.health.status}{"\n"}Revision: {.status.sync.revision}{"\n"}' \
-  > "$output_directory/argocd-status.txt"
+capture() {
+  local output_file="$1"
+  shift
 
-kubectl -n "$namespace" get deployment,pods \
-  > "$output_directory/kubernetes-resources.txt"
+  "$@" >"$output_directory/$output_file" 2>&1 || true
+}
+
+capture \
+  argocd-status.txt \
+  kubectl -n argocd get application "$application" \
+    -o jsonpath='Application: {.metadata.name}{"\n"}Sync: {.status.sync.status}{"\n"}Health: {.status.health.status}{"\n"}Revision: {.status.sync.revision}{"\n"}'
+
+capture \
+  kubernetes-resources.txt \
+  kubectl -n "$namespace" get deployment,replicaset,pods -o wide
+
+capture \
+  events.txt \
+  kubectl -n "$namespace" get events \
+    --sort-by=.metadata.creationTimestamp
 
 pod="$(
   kubectl -n "$namespace" get pods \
     -l app.kubernetes.io/instance="$application" \
-    -o jsonpath='{.items[0].metadata.name}'
+    --field-selector=status.phase=Running \
+    -o jsonpath='{.items[0].metadata.name}' \
+    2>/dev/null || true
 )"
 
-kubectl -n "$namespace" get pod "$pod" \
-  -o jsonpath='Pod: {.metadata.name}{"\n"}Image: {.spec.containers[0].image}{"\n"}Image ID: {.status.containerStatuses[0].imageID}{"\n"}Ready: {.status.containerStatuses[0].ready}{"\n"}Started: {.status.containerStatuses[0].started}{"\n"}Restarts: {.status.containerStatuses[0].restartCount}{"\n"}' \
-  > "$output_directory/pod-status.txt"
+if [[ -n "$pod" ]]; then
+  kubectl -n "$namespace" get pod "$pod" -o json |
+    jq '
+      {
+        pod: .metadata.name,
+        namespace: .metadata.namespace,
+        node: .spec.nodeName,
+        phase: .status.phase,
+        containers: [
+          .spec.containers[] as $container
+          | {
+              name: $container.name,
+              image: $container.image,
+              status: (
+                [
+                  .status.containerStatuses[]?
+                  | select(.name == $container.name)
+                  | {
+                      ready,
+                      started,
+                      restartCount,
+                      imageID,
+                      state,
+                      lastState
+                    }
+                ][0] // null
+              )
+            }
+        ]
+      }
+    ' >"$output_directory/pod-status.json" 2>&1 || true
 
-kubectl -n "$namespace" logs "$pod" \
-  --tail=300 \
-  > "$output_directory/robotek.log"
+  mapfile -t containers < <(
+    kubectl -n "$namespace" get pod "$pod" \
+      -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' \
+      2>/dev/null || true
+  )
 
-kubectl -n "$namespace" top pod "$pod" \
-  > "$output_directory/resources.txt" 2>&1 || true
+  for container in "${containers[@]}"; do
+    safe_container="$(
+      printf '%s' "$container" |
+      tr -c 'A-Za-z0-9._-' '_'
+    )"
 
-kubectl -n "$namespace" get events \
-  --sort-by=.metadata.creationTimestamp \
-  > "$output_directory/events.txt"
+    capture \
+      "logs-${safe_container}.txt" \
+      kubectl -n "$namespace" logs "$pod" \
+        -c "$container" \
+        --tail=300
+  done
 
-helm list --namespace "$namespace" \
-  > "$output_directory/helm-list.txt"
+  capture \
+    resources.txt \
+    kubectl -n "$namespace" top pod "$pod" --containers
+else
+  printf '%s\n' \
+    "No running Robotek Pod was available during evidence collection." \
+    >"$output_directory/pod-status.txt"
+fi
+
+capture \
+  runner-permissions.txt \
+  kubectl auth can-i --list --namespace="$namespace"
+
+checksum_tmp="$(mktemp)"
+trap 'rm -f "$checksum_tmp"' EXIT
 
 (
-  cd "$output_directory"
-  sha256sum ./* > checksums.sha256
+  cd "$output_directory" || exit 1
+
+  find . \
+    -maxdepth 1 \
+    -type f \
+    ! -name checksums.sha256 \
+    -print0 |
+    sort -z |
+    xargs -0 -r sha256sum \
+      >"$checksum_tmp"
 )
+
+mv "$checksum_tmp" "$output_directory/checksums.sha256"
+trap - EXIT
 
 echo "Evidence collected in: $output_directory"

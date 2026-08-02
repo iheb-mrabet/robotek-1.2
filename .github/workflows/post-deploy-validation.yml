@@ -1,0 +1,362 @@
+name: Staging Post-Deploy Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - deploy/helm/robotek/values-staging.yaml
+
+  workflow_dispatch:
+
+concurrency:
+  group: robotek-staging-post-deploy-validation
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-staging:
+    name: Verify Robotek Staging
+
+    if: >-
+      ${{
+        github.repository == 'iheb-mrabet/robotek-1.2' &&
+        github.ref == 'refs/heads/main'
+      }}
+
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - robotek-staging
+      - k3s
+      - staging
+
+    timeout-minutes: 25
+
+    env:
+      NAMESPACE: robotek-staging
+      APPLICATION: robotek-staging
+      DEPLOYMENT: robotek-staging
+      EVIDENCE_ROOT: reports/deployment
+
+    steps:
+      - name: Checkout exact validation revision
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Initialize validation evidence
+        id: context
+        if: ${{ steps.checkout.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf reports
+          mkdir -p reports/workflow reports/deployment
+
+          {
+            echo "Repository=${GITHUB_REPOSITORY}"
+            echo "Event=${GITHUB_EVENT_NAME}"
+            echo "Ref=${GITHUB_REF}"
+            echo "SHA=${GITHUB_SHA}"
+            echo "RunID=${GITHUB_RUN_ID}"
+            echo "RunAttempt=${GITHUB_RUN_ATTEMPT}"
+            echo "RunnerName=${RUNNER_NAME}"
+            echo "RunnerOS=${RUNNER_OS}"
+            echo "RunnerArch=${RUNNER_ARCH}"
+            echo "Hostname=$(hostname)"
+            echo "User=$(id -un)"
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } | tee reports/workflow/context.txt
+
+      - name: Resolve expected staging digest
+        id: digest
+        if: ${{ steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("deploy/helm/robotek/values-staging.yaml")
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          in_image = False
+          digests: list[str] = []
+
+          for line in lines:
+              if line == "image:":
+                  in_image = True
+                  continue
+
+              if in_image and line and not line.startswith(" "):
+                  in_image = False
+
+              if not in_image:
+                  continue
+
+              match = re.fullmatch(
+                  r'  digest:\s*"?'
+                  r'(sha256:[0-9a-f]{64})'
+                  r'"?\s*',
+                  line,
+              )
+
+              if match:
+                  digests.append(match.group(1))
+
+          if len(digests) != 1:
+              raise SystemExit(
+                  "Expected exactly one image digest, "
+                  f"found {len(digests)}"
+              )
+
+          digest = digests[0]
+
+          with open(
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8",
+          ) as output:
+              output.write(f"digest={digest}\n")
+
+          print(f"Expected staging digest: {digest}")
+          PY
+
+      - name: Wait for matching Argo CD desired state
+        id: argocd
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          mkdir -p reports/workflow
+
+          exec > >(
+            tee reports/workflow/argocd-reconciliation.txt
+          ) 2>&1
+
+          reconciled=false
+
+          for attempt in $(seq 1 120); do
+            sync="$(
+              kubectl -n argocd get application "$APPLICATION" \
+                -o jsonpath='{.status.sync.status}' \
+                2>/dev/null || true
+            )"
+
+            health="$(
+              kubectl -n argocd get application "$APPLICATION" \
+                -o jsonpath='{.status.health.status}' \
+                2>/dev/null || true
+            )"
+
+            revision="$(
+              kubectl -n argocd get application "$APPLICATION" \
+                -o jsonpath='{.status.sync.revision}' \
+                2>/dev/null || true
+            )"
+
+            compatible=false
+
+            if [[ "$revision" =~ ^[0-9a-f]{40}$ ]] &&
+               git cat-file -e "${revision}^{commit}" 2>/dev/null &&
+               git diff --quiet \
+                 "$revision" \
+                 "$GITHUB_SHA" \
+                 -- deploy/helm/robotek
+            then
+              compatible=true
+            fi
+
+            echo \
+              "Attempt=$attempt" \
+              "Sync=${sync:-Pending}" \
+              "Health=${health:-Pending}" \
+              "Revision=${revision:-Pending}" \
+              "DesiredStateCompatible=$compatible"
+
+            if [[ "$sync" == "Synced" ]] &&
+               [[ "$health" == "Healthy" ]] &&
+               [[ "$compatible" == "true" ]]
+            then
+              reconciled=true
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [[ "$reconciled" != "true" ]]; then
+            echo
+            echo "=== Argo CD conditions ==="
+
+            kubectl -n argocd get application "$APPLICATION" \
+              -o jsonpath='{range .status.conditions[*]}{.type}{": "}{.message}{"\n"}{end}' \
+              || true
+
+            echo
+            echo "=== Robotek resources ==="
+
+            kubectl -n "$NAMESPACE" get \
+              deployment,replicaset,pods \
+              -o wide \
+              || true
+
+            echo "Argo CD reconciliation validation failed." >&2
+            exit 1
+          fi
+
+          echo "Argo CD desired state is Synced and Healthy."
+
+      - name: Verify deployed release
+        id: release
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          EXPECTED_DIGEST: ${{ steps.digest.outputs.digest }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          mkdir -p reports/workflow
+
+          ./scripts/deployment/verify_release.sh \
+            "$NAMESPACE" \
+            "$APPLICATION" \
+            "$DEPLOYMENT" \
+            2>&1 |
+            tee reports/workflow/release-verification.txt
+
+      - name: Run ROS 2 staging smoke test
+        id: smoke
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          mkdir -p reports/workflow
+
+          ./scripts/deployment/smoke_test.sh \
+            "$NAMESPACE" \
+            "$APPLICATION" \
+            robotek \
+            2>&1 |
+            tee reports/workflow/ros-smoke-test.txt
+
+      - name: Collect diagnostic evidence
+        id: evidence
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+
+          mkdir -p reports/workflow reports/deployment
+
+          {
+            echo "Checkout=${{ steps.checkout.outcome }}"
+            echo "Context=${{ steps.context.outcome }}"
+            echo "Digest=${{ steps.digest.outcome }}"
+            echo "ArgoCD=${{ steps.argocd.outcome }}"
+            echo "Release=${{ steps.release.outcome }}"
+            echo "Smoke=${{ steps.smoke.outcome }}"
+          } > reports/workflow/validation-outcomes.txt
+
+          EVIDENCE_ROOT="$EVIDENCE_ROOT" \
+            ./scripts/deployment/collect_evidence.sh \
+              "$NAMESPACE" \
+              "$APPLICATION" \
+              2>&1 |
+            tee reports/workflow/evidence-collection.txt
+
+      - name: Upload validation evidence
+        id: artifact
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            robotek-staging-evidence-${{
+              github.run_id
+            }}-${{
+              github.run_attempt
+            }}
+          path: reports/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Evaluate post-deployment validation
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          CONTEXT_RESULT: ${{ steps.context.outcome }}
+          DIGEST_RESULT: ${{ steps.digest.outcome }}
+          ARGOCD_RESULT: ${{ steps.argocd.outcome }}
+          RELEASE_RESULT: ${{ steps.release.outcome }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          EVIDENCE_RESULT: ${{ steps.evidence.outcome }}
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+          EXPECTED_DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          set -Eeuo pipefail
+
+          {
+            echo "## Staging Post-Deployment Validation"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Checkout | ${CHECKOUT_RESULT} |"
+            echo "| Context | ${CONTEXT_RESULT} |"
+            echo "| Digest resolution | ${DIGEST_RESULT} |"
+            echo "| Argo CD reconciliation | ${ARGOCD_RESULT} |"
+            echo "| Release verification | ${RELEASE_RESULT} |"
+            echo "| ROS 2 smoke test | ${SMOKE_RESULT} |"
+            echo "| Evidence collection | ${EVIDENCE_RESULT} |"
+            echo "| Evidence artifact | ${ARTIFACT_RESULT} |"
+            echo
+            echo "Expected digest: \`${EXPECTED_DIGEST:-unavailable}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failures=0
+
+          for result in \
+            "$CHECKOUT_RESULT" \
+            "$CONTEXT_RESULT" \
+            "$DIGEST_RESULT" \
+            "$ARGOCD_RESULT" \
+            "$RELEASE_RESULT" \
+            "$SMOKE_RESULT" \
+            "$EVIDENCE_RESULT" \
+            "$ARTIFACT_RESULT"
+          do
+            if [[ "$result" != "success" ]]; then
+              failures=$((failures + 1))
+            fi
+          done
+
+          if (( failures > 0 )); then
+            echo \
+              "Post-deployment validation failed with" \
+              "$failures unsuccessful checks." >&2
+
+            exit 1
+          fi
+
+          echo "Post-deployment validation passed."

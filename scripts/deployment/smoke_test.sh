@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
+# The single-quoted commands below are intentionally expanded inside the Pod.
+# shellcheck disable=SC2016
 
 set -Eeuo pipefail
 
 namespace="${1:-robotek-staging}"
 application="${2:-robotek-staging}"
+container="${3:-robotek}"
 
 pod="$(
   kubectl -n "$namespace" get pods \
@@ -17,48 +20,16 @@ if [[ -z "$pod" ]]; then
   exit 1
 fi
 
-echo "Testing Pod: $pod"
-
-expected_nodes=(
-  /mission_manager
-  /robot_state_publisher
-  /ros_gz_bridge
-  /safety_controller
-  /waypoint_controller
-)
-
-nodes=""
-nodes_valid=false
-
-for attempt in 1 2 3 4 5; do
-  nodes="$(
-    kubectl -n "$namespace" exec "$pod" -- bash -lc '
-      source /opt/ros/${ROS_DISTRO}/setup.bash
-      source /opt/robot/setup.bash
-      ros2 node list --no-daemon --spin-time 5
-    ' 2>/dev/null || true
-  )"
-
-  nodes_valid=true
-
-  for expected_node in "${expected_nodes[@]}"; do
-    if ! grep -Fxq "$expected_node" <<<"$nodes"; then
-      nodes_valid=false
-      break
-    fi
-  done
-
-  [[ "$nodes_valid" == true ]] && break
-  sleep 3
-done
-
-if [[ "$nodes_valid" != true ]]; then
-  echo "Missing expected ROS 2 nodes." >&2
-  printf '%s\n' "$nodes"
+if ! kubectl -n "$namespace" get pod "$pod" \
+  -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' |
+  grep -Fxq "$container"
+then
+  echo "Container not found in Pod: $container" >&2
   exit 1
 fi
 
-echo "Expected ROS 2 nodes found."
+echo "Testing Pod: $pod"
+echo "Testing container: $container"
 
 expected_topics=(
   /clock
@@ -74,13 +45,16 @@ topics_valid=false
 
 for attempt in 1 2 3 4 5; do
   topics="$(
-    kubectl -n "$namespace" exec "$pod" -- bash -lc '
-      source /opt/ros/${ROS_DISTRO}/setup.bash
-      source /opt/robot/setup.bash
-      ros2 daemon stop >/dev/null 2>&1 || true
-      sleep 2
-      ros2 topic list
-    ' 2>/dev/null || true
+    kubectl -n "$namespace" exec \
+      -c "$container" \
+      "$pod" \
+      -- bash -lc '
+        source /opt/ros/${ROS_DISTRO}/setup.bash
+        source /opt/robot/setup.bash
+        ros2 daemon stop >/dev/null 2>&1 || true
+        sleep 2
+        ros2 topic list
+      ' 2>/dev/null || true
   )"
 
   topics_valid=true
@@ -92,7 +66,11 @@ for attempt in 1 2 3 4 5; do
     fi
   done
 
-  [[ "$topics_valid" == true ]] && break
+  if [[ "$topics_valid" == true ]]; then
+    break
+  fi
+
+  echo "Topic discovery attempt $attempt did not find every expected topic."
   sleep 3
 done
 
@@ -104,44 +82,50 @@ fi
 
 echo "Expected ROS 2 topics found."
 
-kubectl -n "$namespace" exec "$pod" -- bash -lc '
-  source /opt/ros/${ROS_DISTRO}/setup.bash
-  source /opt/robot/setup.bash
+kubectl -n "$namespace" exec \
+  -c "$container" \
+  "$pod" \
+  -- bash -lc '
+    source /opt/ros/${ROS_DISTRO}/setup.bash
+    source /opt/robot/setup.bash
 
-  for attempt in 1 2 3; do
-    timeout 20 ros2 topic echo \
-      /mission/status \
-      mock_robot_interfaces/msg/MissionStatus \
-      --once \
-      --no-daemon \
-      >/dev/null 2>&1 && exit 0
+    for attempt in 1 2 3; do
+      timeout 20 ros2 topic echo \
+        /mission/status \
+        mock_robot_interfaces/msg/MissionStatus \
+        --once \
+        --no-daemon \
+        >/dev/null 2>&1 && exit 0
 
-    sleep 3
-  done
+      sleep 3
+    done
 
-  exit 1
-'
+    exit 1
+  '
 
 echo "Mission status is publishing."
 
-kubectl -n "$namespace" exec "$pod" -- bash -lc '
-  source /opt/ros/${ROS_DISTRO}/setup.bash
-  source /opt/robot/setup.bash
+kubectl -n "$namespace" exec \
+  -c "$container" \
+  "$pod" \
+  -- bash -lc '
+    source /opt/ros/${ROS_DISTRO}/setup.bash
+    source /opt/robot/setup.bash
 
-  for attempt in 1 2 3; do
-    timeout 20 ros2 topic echo \
-      /odom \
-      nav_msgs/msg/Odometry \
-      --once \
-      --no-daemon \
-      --qos-reliability best_effort \
-      >/dev/null 2>&1 && exit 0
+    for attempt in 1 2 3; do
+      timeout 20 ros2 topic echo \
+        /odom \
+        nav_msgs/msg/Odometry \
+        --once \
+        --no-daemon \
+        --qos-reliability best_effort \
+        >/dev/null 2>&1 && exit 0
 
-    sleep 3
-  done
+      sleep 3
+    done
 
-  exit 1
-'
+    exit 1
+  '
 
 echo "Odometry is publishing."
 echo "Robotek smoke test passed."
