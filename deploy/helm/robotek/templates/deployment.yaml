@@ -122,11 +122,17 @@ spec:
             successThreshold: {{ .Values.healthProbes.readiness.successThreshold }}
           {{- end }}
 
-          {{- if .Values.sharedMemory.enabled }}
           volumeMounts:
+            - name: robot-tmp
+              mountPath: /tmp
+
+            - name: robot-home
+              mountPath: /home/robot
+
+            {{- if .Values.sharedMemory.enabled }}
             - name: shared-memory
               mountPath: /dev/shm
-          {{- end }}
+            {{- end }}
 
         {{- if .Values.observability.enabled }}
         - name: ros-exporter
@@ -175,15 +181,36 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
+
+          volumeMounts:
+            - name: exporter-tmp
+              mountPath: /tmp
+
+            - name: exporter-home
+              mountPath: /home/robot
         {{- end }}
 
-      {{- if .Values.sharedMemory.enabled }}
       volumes:
+        - name: robot-tmp
+          emptyDir: {}
+
+        - name: robot-home
+          emptyDir: {}
+
+        {{- if .Values.observability.enabled }}
+        - name: exporter-tmp
+          emptyDir: {}
+
+        - name: exporter-home
+          emptyDir: {}
+        {{- end }}
+
+        {{- if .Values.sharedMemory.enabled }}
         - name: shared-memory
           emptyDir:
             medium: Memory
             sizeLimit: {{ .Values.sharedMemory.sizeLimit }}
-      {{- end }}
+        {{- end }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:
