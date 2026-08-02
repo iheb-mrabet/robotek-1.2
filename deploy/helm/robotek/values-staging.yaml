@@ -1,76 +1,17 @@
-replicaCount: 1
-
 image:
   repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
   tag: main
-  digest: ""
+  digest: "sha256:81fa0a754dd4cf42b53ae1f2324fafc1099c7e4cbf894904c21491f164e47965"
   pullPolicy: IfNotPresent
-
-imagePullSecrets: []
-
-nameOverride: ""
-fullnameOverride: ""
-
-deployment:
-  strategy:
-    type: Recreate
 
 robot:
   rosDomainId: 42
 
-  launch:
-    package: mock_robot_bringup
-    file: full_simulation.launch.py
-
-    arguments:
-      gui: "false"
-      use_sim_time: "true"
+podLabels:
+  environment: staging
 
 observability:
   enabled: false
-  metricsPort: 9108
-
-  exporter:
-    resources:
-      requests:
-        cpu: 25m
-        memory: 64Mi
-      limits:
-        cpu: 150m
-        memory: 128Mi
-
-  serviceMonitor:
-    enabled: true
-    interval: 30s
-    scrapeTimeout: 10s
-serviceAccount:
-  create: true
-  automount: false
-  annotations: {}
-  name: ""
-
-podAnnotations: {}
-
-podLabels:
-  app.kubernetes.io/component: robot-runtime
-  app.kubernetes.io/part-of: robotek
-
-podSecurityContext:
-  runAsNonRoot: true
-  runAsUser: 1001
-  runAsGroup: 1001
-  fsGroup: 1001
-  fsGroupChangePolicy: OnRootMismatch
-  seccompProfile:
-    type: RuntimeDefault
-
-securityContext:
-  allowPrivilegeEscalation: false
-  privileged: false
-  readOnlyRootFilesystem: false
-  capabilities:
-    drop:
-      - ALL
 
 resources:
   requests:
@@ -84,26 +25,3 @@ resources:
 sharedMemory:
   enabled: true
   sizeLimit: 512Mi
-
-healthProbes:
-  startup:
-    enabled: true
-    periodSeconds: 10
-    timeoutSeconds: 20
-    failureThreshold: 30
-    successThreshold: 1
-
-  readiness:
-    enabled: true
-    periodSeconds: 30
-    timeoutSeconds: 20
-    failureThreshold: 3
-    successThreshold: 1
-
-terminationGracePeriodSeconds: 30
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}
