@@ -26,6 +26,23 @@ robot:
       gui: "false"
       use_sim_time: "true"
 
+observability:
+  enabled: true
+  metricsPort: 9108
+
+  exporter:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 150m
+        memory: 128Mi
+
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
 serviceAccount:
   create: true
   automount: false

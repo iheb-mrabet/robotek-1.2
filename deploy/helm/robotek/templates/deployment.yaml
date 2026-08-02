@@ -128,6 +128,55 @@ spec:
               mountPath: /dev/shm
           {{- end }}
 
+        {{- if .Values.observability.enabled }}
+        - name: ros-exporter
+
+          image: {{ include "robotek.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          args:
+            - ros2
+            - run
+            - mock_robot_observability
+            - ros_exporter
+
+          env:
+            - name: ROS_DOMAIN_ID
+              value: {{ .Values.robot.rosDomainId | quote }}
+
+            - name: ROBOTEK_METRICS_PORT
+              value: {{ .Values.observability.metricsPort | quote }}
+
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.observability.metricsPort }}
+              protocol: TCP
+
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+
+          resources:
+            {{- toYaml .Values.observability.exporter.resources | nindent 12 }}
+
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /-/ready
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+        {{- end }}
+
       {{- if .Values.sharedMemory.enabled }}
       volumes:
         - name: shared-memory

@@ -1,0 +1,21 @@
+{{- if .Values.observability.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "robotek.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "robotek.labels" . | nindent 4 }}
+
+spec:
+  type: ClusterIP
+
+  selector:
+    {{- include "robotek.selectorLabels" . | nindent 4 }}
+
+  ports:
+    - name: metrics
+      protocol: TCP
+      port: {{ .Values.observability.metricsPort }}
+      targetPort: metrics
+{{- end }}
