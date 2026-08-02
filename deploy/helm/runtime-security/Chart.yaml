@@ -1,0 +1,39 @@
+apiVersion: v2
+
+name: robotek-runtime-security
+
+description: >-
+  GitOps-managed Falco runtime security for the Robotek K3s staging
+  environment.
+
+type: application
+
+version: 0.1.0
+
+appVersion: "0.44.1"
+
+kubeVersion: ">=1.30.0-0"
+
+home: https://github.com/iheb-mrabet/robotek-1.2
+
+sources:
+  - https://github.com/iheb-mrabet/robotek-1.2
+  - https://github.com/falcosecurity/falco
+  - https://github.com/falcosecurity/charts
+
+keywords:
+  - falco
+  - runtime-security
+  - ebpf
+  - kubernetes
+  - k3s
+  - gitops
+
+maintainers:
+  - name: Iheb Mrabet
+    url: https://github.com/iheb-mrabet
+
+dependencies:
+  - name: falco
+    version: "9.1.0"
+    repository: https://falcosecurity.github.io/charts
