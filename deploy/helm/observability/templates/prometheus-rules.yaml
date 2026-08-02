@@ -46,14 +46,12 @@ spec:
 
         - alert: RobotekContainerRestarting
           expr: |
-            sum(
-              increase(
-                kube_pod_container_status_restarts_total{
-                  namespace="robotek-staging",
-                  pod=~"robotek-staging-.*",
-                  container!=""
-                }[15m]
-              )
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace="robotek-staging",
+                pod=~"robotek-staging-.*",
+                container!=""
+              }[15m]
             ) > 0
           for: 1m
           labels:
@@ -61,24 +59,22 @@ spec:
             service: robotek
           annotations:
             summary: Robotek container restarted
-            description: A Robotek staging container restarted during the last fifteen minutes.
+            description: Robotek container {{ $labels.container }} in Pod {{ $labels.pod }} restarted during the last fifteen minutes.
 
         - alert: RobotekImagePullFailure
           expr: |
-            max(
-              kube_pod_container_status_waiting_reason{
-                namespace="robotek-staging",
-                pod=~"robotek-staging-.*",
-                reason=~"ImagePullBackOff|ErrImagePull"
-              }
-            ) > 0
+            kube_pod_container_status_waiting_reason{
+              namespace="robotek-staging",
+              pod=~"robotek-staging-.*",
+              reason=~"ImagePullBackOff|ErrImagePull"
+            } > 0
           for: 2m
           labels:
             severity: critical
             service: robotek
           annotations:
             summary: Robotek image pull failure
-            description: A Robotek staging container cannot pull its configured image.
+            description: Robotek container {{ $labels.container }} in Pod {{ $labels.pod }} cannot pull its configured image. Reason={{ $labels.reason }}.
 
         - alert: RobotekArgoCDOutOfSync
           expr: |
