@@ -1,0 +1,656 @@
+{
+    "annotations":  {
+                        "list":  [
+
+                                 ]
+                    },
+    "editable":  true,
+    "fiscalYearStartMonth":  0,
+    "graphTooltip":  0,
+    "id":  null,
+    "links":  [
+
+              ],
+    "panels":  [
+                   {
+                       "id":  1,
+                       "type":  "stat",
+                       "title":  "ROS Exporter",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_exporter_up{namespace=\"robotek-staging\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  2,
+                       "type":  "stat",
+                       "title":  "Discovered ROS Topics",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  6,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topics{namespace=\"robotek-staging\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  3,
+                       "type":  "stat",
+                       "title":  "Collection Errors",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  12,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_collection_errors_total{namespace=\"robotek-staging\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  4,
+                       "type":  "stat",
+                       "title":  "Mission Status Publisher",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  18,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topic_publishers{namespace=\"robotek-staging\",topic=\"/mission/status\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  5,
+                       "type":  "stat",
+                       "title":  "Odometry Publisher",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  0,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topic_publishers{namespace=\"robotek-staging\",topic=\"/odom\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  6,
+                       "type":  "stat",
+                       "title":  "Laser Scan Publisher",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  6,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topic_publishers{namespace=\"robotek-staging\",topic=\"/scan\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  7,
+                       "type":  "stat",
+                       "title":  "Velocity Safety Subscriber",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  12,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topic_subscribers{namespace=\"robotek-staging\",topic=\"/cmd_vel_requested\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   },
+                   {
+                       "id":  8,
+                       "type":  "stat",
+                       "title":  "Emergency Stop Subscriber",
+                       "datasource":  {
+                                          "type":  "prometheus",
+                                          "uid":  "prometheus"
+                                      },
+                       "gridPos":  {
+                                       "h":  5,
+                                       "w":  6,
+                                       "x":  18,
+                                       "y":  5
+                                   },
+                       "targets":  [
+                                       {
+                                           "datasource":  {
+                                                              "type":  "prometheus",
+                                                              "uid":  "prometheus"
+                                                          },
+                                           "editorMode":  "code",
+                                           "expr":  "max(robotek_ros_topic_subscribers{namespace=\"robotek-staging\",topic=\"/emergency_stop\"}) or vector(0)",
+                                           "instant":  true,
+                                           "legendFormat":  "__auto",
+                                           "range":  false,
+                                           "refId":  "A"
+                                       }
+                                   ],
+                       "options":  {
+                                       "colorMode":  "value",
+                                       "graphMode":  "area",
+                                       "justifyMode":  "auto",
+                                       "orientation":  "auto",
+                                       "reduceOptions":  {
+                                                             "calcs":  [
+                                                                           "lastNotNull"
+                                                                       ],
+                                                             "fields":  "",
+                                                             "values":  false
+                                                         },
+                                       "textMode":  "auto",
+                                       "wideLayout":  true
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                             {
+                                                                                 "type":  "value",
+                                                                                 "options":  {
+                                                                                                 "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red",
+                                                                                                           "index":  1
+                                                                                                       },
+                                                                                                 "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green",
+                                                                                                           "index":  0
+                                                                                                       }
+                                                                                             }
+                                                                             }
+                                                                         ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                             {
+                                                                                                 "color":  "green",
+                                                                                                 "value":  null
+                                                                                             }
+                                                                                         ]
+                                                                           },
+                                                            "unit":  "short"
+                                                        },
+                                           "overrides":  [
+
+                                                         ]
+                                       }
+                   }
+               ],
+    "refresh":  "30s",
+    "schemaVersion":  39,
+    "tags":  [
+                 "robotek",
+                 "ros2",
+                 "staging"
+             ],
+    "templating":  {
+                       "list":  [
+
+                                ]
+                   },
+    "time":  {
+                 "from":  "now-1h",
+                 "to":  "now"
+             },
+    "timezone":  "browser",
+    "title":  "Robotek ROS Health",
+    "uid":  "robotek-ros-health",
+    "version":  1
+}
