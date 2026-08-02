@@ -1,4 +1,4 @@
-﻿image:
+image:
   repository: ghcr.io/iheb-mrabet/robotek-1.2-runtime
   tag: main
   digest: "sha256:81fa0a754dd4cf42b53ae1f2324fafc1099c7e4cbf894904c21491f164e47965"
@@ -11,8 +11,7 @@ podLabels:
   environment: staging
 
 observability:
-  enabled: false
-
+  enabled: true
 resources:
   requests:
     cpu: 500m
