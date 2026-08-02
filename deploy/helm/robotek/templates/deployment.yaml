@@ -78,12 +78,14 @@ spec:
 
                   timeout 8 ros2 topic echo \
                     /mission/status \
+                    mock_robot_interfaces/msg/MissionStatus \
                     --once \
                     --no-daemon \
                     >/dev/null 2>&1 &&
 
                   timeout 8 ros2 topic echo \
                     /odom \
+                    nav_msgs/msg/Odometry \
                     --once \
                     --no-daemon \
                     --qos-reliability best_effort \
@@ -106,12 +108,14 @@ spec:
 
                   timeout 8 ros2 topic echo \
                     /mission/status \
+                    mock_robot_interfaces/msg/MissionStatus \
                     --once \
                     --no-daemon \
                     >/dev/null 2>&1 &&
 
                   timeout 8 ros2 topic echo \
                     /odom \
+                    nav_msgs/msg/Odometry \
                     --once \
                     --no-daemon \
                     --qos-reliability best_effort \
