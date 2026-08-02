@@ -1,0 +1,353 @@
+name: Scheduled Staging Security Rescan
+
+on:
+  schedule:
+    - cron: "37 3 * * 4"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: scheduled-staging-security-rescan
+  cancel-in-progress: false
+
+env:
+  VALUES_FILE: deploy/helm/robotek/values-staging.yaml
+  CHART_PATH: deploy/helm/robotek
+  REPORT_DIR: reports/scheduled-security
+
+jobs:
+  scan-promoted-staging:
+    name: Scan Promoted Staging Runtime
+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout main
+        id: checkout
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Initialize report directory
+        id: initialize
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          rm -rf "$REPORT_DIR"
+          mkdir -p "$REPORT_DIR"
+
+      - name: Resolve promoted image reference
+        id: image
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ["VALUES_FILE"])
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          repository = None
+          digest = None
+          in_image = False
+
+          for line in lines:
+              if line == "image:":
+                  in_image = True
+                  continue
+
+              if in_image and line and not line.startswith(" "):
+                  in_image = False
+
+              if not in_image:
+                  continue
+
+              repository_match = re.fullmatch(
+                  r"\s{2}repository:\s*(\S+)\s*",
+                  line,
+              )
+
+              digest_match = re.fullmatch(
+                  r'\s{2}digest:\s*"?'
+                  r'(sha256:[0-9a-f]{64})'
+                  r'"?\s*',
+                  line,
+              )
+
+              if repository_match:
+                  repository = repository_match.group(1)
+
+              if digest_match:
+                  digest = digest_match.group(1)
+
+          if repository is None:
+              raise SystemExit("Staging image repository was not found")
+
+          if digest is None:
+              raise SystemExit("Staging image digest was not found")
+
+          reference = f"{repository}@{digest}"
+
+          with open(
+              os.environ["GITHUB_OUTPUT"],
+              "a",
+              encoding="utf-8",
+          ) as output:
+              output.write(f"repository={repository}\n")
+              output.write(f"digest={digest}\n")
+              output.write(f"reference={reference}\n")
+
+          report = Path(os.environ["REPORT_DIR"]) / "image-reference.txt"
+
+          report.write_text(
+              f"Repository={repository}\n"
+              f"Digest={digest}\n"
+              f"Reference={reference}\n",
+              encoding="utf-8",
+          )
+
+          print(f"Promoted image: {reference}")
+          PY
+
+      - name: Log in to GHCR
+        id: registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate runtime vulnerability JSON
+        id: image-json
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.reference }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: json
+          output: reports/scheduled-security/trivy-image.json
+
+      - name: Enforce runtime vulnerability policy
+        id: image-gate
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image.outputs.reference }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: reports/scheduled-security/trivy-image.txt
+
+      - name: Set up Helm
+        id: helm
+        uses: azure/setup-helm@v5.0.0
+        with:
+          version: v3.21.1
+
+      - name: Render staging Kubernetes manifests
+        id: render
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          helm lint \
+            "$CHART_PATH" \
+            --values "$VALUES_FILE" \
+            2>&1 |
+            tee "$REPORT_DIR/helm-lint.txt"
+
+          helm template \
+            robotek-staging \
+            "$CHART_PATH" \
+            --namespace robotek-staging \
+            --values "$VALUES_FILE" \
+            > "$REPORT_DIR/rendered-staging.yaml"
+
+          test -s "$REPORT_DIR/rendered-staging.yaml"
+
+      - name: Generate Kubernetes configuration JSON
+        id: config-json
+        if: ${{ steps.render.outcome == 'success' }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: reports/scheduled-security/rendered-staging.yaml
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          format: json
+          output: reports/scheduled-security/trivy-config.json
+
+      - name: Enforce Kubernetes configuration policy
+        id: config-gate
+        if: ${{ steps.render.outcome == 'success' }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: reports/scheduled-security/rendered-staging.yaml
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          output: reports/scheduled-security/trivy-config.txt
+
+      - name: Record workflow metadata
+        if: ${{ always() }}
+        shell: bash
+        env:
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: |
+          set -u
+
+          mkdir -p "$REPORT_DIR"
+
+          {
+            echo "Repository=${GITHUB_REPOSITORY}"
+            echo "SHA=${GITHUB_SHA}"
+            echo "RunID=${GITHUB_RUN_ID}"
+            echo "RunAttempt=${GITHUB_RUN_ATTEMPT}"
+            echo "Event=${GITHUB_EVENT_NAME}"
+            echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Image=${IMAGE_REFERENCE:-unavailable}"
+            echo "Checkout=${{ steps.checkout.outcome }}"
+            echo "Initialize=${{ steps.initialize.outcome }}"
+            echo "ImageResolution=${{ steps.image.outcome }}"
+            echo "RegistryLogin=${{ steps.registry.outcome }}"
+            echo "ImageJSON=${{ steps.image-json.outcome }}"
+            echo "ImagePolicy=${{ steps.image-gate.outcome }}"
+            echo "HelmSetup=${{ steps.helm.outcome }}"
+            echo "ManifestRender=${{ steps.render.outcome }}"
+            echo "ConfigJSON=${{ steps.config-json.outcome }}"
+            echo "ConfigPolicy=${{ steps.config-gate.outcome }}"
+          } > "$REPORT_DIR/workflow-metadata.txt"
+
+      - name: Generate report checksums
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -u
+
+          mkdir -p "$REPORT_DIR"
+
+          checksum_file="$(mktemp)"
+          trap 'rm -f "$checksum_file"' EXIT
+
+          find "$REPORT_DIR" \
+            -maxdepth 1 \
+            -type f \
+            ! -name checksums.sha256 \
+            -print0 |
+            sort -z |
+            xargs -0 -r sha256sum \
+              > "$checksum_file"
+
+          mv "$checksum_file" "$REPORT_DIR/checksums.sha256"
+          trap - EXIT
+
+      - name: Upload scheduled security reports
+        id: artifact
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: >-
+            robotek-scheduled-security-${{
+              github.run_id
+            }}-${{
+              github.run_attempt
+            }}
+          path: reports/scheduled-security/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
+
+      - name: Evaluate scheduled security scan
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHECKOUT_RESULT: ${{ steps.checkout.outcome }}
+          INITIALIZE_RESULT: ${{ steps.initialize.outcome }}
+          IMAGE_RESULT: ${{ steps.image.outcome }}
+          REGISTRY_RESULT: ${{ steps.registry.outcome }}
+          IMAGE_JSON_RESULT: ${{ steps.image-json.outcome }}
+          IMAGE_GATE_RESULT: ${{ steps.image-gate.outcome }}
+          HELM_RESULT: ${{ steps.helm.outcome }}
+          RENDER_RESULT: ${{ steps.render.outcome }}
+          CONFIG_JSON_RESULT: ${{ steps.config-json.outcome }}
+          CONFIG_GATE_RESULT: ${{ steps.config-gate.outcome }}
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+          IMAGE_REFERENCE: ${{ steps.image.outputs.reference }}
+        run: |
+          set -Eeuo pipefail
+
+          {
+            echo "## Scheduled Staging Security Rescan"
+            echo
+            echo "Image: \`${IMAGE_REFERENCE:-unavailable}\`"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Checkout | ${CHECKOUT_RESULT} |"
+            echo "| Initialization | ${INITIALIZE_RESULT} |"
+            echo "| Image resolution | ${IMAGE_RESULT} |"
+            echo "| Registry login | ${REGISTRY_RESULT} |"
+            echo "| Image JSON report | ${IMAGE_JSON_RESULT} |"
+            echo "| Image vulnerability policy | ${IMAGE_GATE_RESULT} |"
+            echo "| Helm setup | ${HELM_RESULT} |"
+            echo "| Manifest render | ${RENDER_RESULT} |"
+            echo "| Config JSON report | ${CONFIG_JSON_RESULT} |"
+            echo "| Config policy | ${CONFIG_GATE_RESULT} |"
+            echo "| Evidence artifact | ${ARTIFACT_RESULT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failures=0
+
+          for result in \
+            "$CHECKOUT_RESULT" \
+            "$INITIALIZE_RESULT" \
+            "$IMAGE_RESULT" \
+            "$REGISTRY_RESULT" \
+            "$IMAGE_JSON_RESULT" \
+            "$IMAGE_GATE_RESULT" \
+            "$HELM_RESULT" \
+            "$RENDER_RESULT" \
+            "$CONFIG_JSON_RESULT" \
+            "$CONFIG_GATE_RESULT" \
+            "$ARTIFACT_RESULT"
+          do
+            if [[ "$result" != "success" ]]; then
+              failures=$((failures + 1))
+            fi
+          done
+
+          if (( failures > 0 )); then
+            echo \
+              "Scheduled security rescan failed with" \
+              "$failures unsuccessful checks." >&2
+
+            exit 1
+          fi
+
+          echo "Scheduled staging security rescan passed."
