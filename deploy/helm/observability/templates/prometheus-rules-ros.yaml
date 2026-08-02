@@ -1,0 +1,146 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: robotek-ros-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+spec:
+  groups:
+    - name: robotek.ros
+      rules:
+        - alert: RobotekROSExporterDown
+          expr: |
+            (
+              max(
+                robotek_ros_exporter_up{
+                  namespace="robotek-staging"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+            component: ros-exporter
+          annotations:
+            summary: Robotek ROS exporter is unavailable
+            description: The ROS metrics exporter has been absent or unhealthy for more than two minutes.
+
+        - alert: RobotekROSCollectionErrors
+          expr: |
+            increase(
+              robotek_ros_collection_errors_total{
+                namespace="robotek-staging"
+              }[15m]
+            ) > 0
+          for: 1m
+          labels:
+            severity: warning
+            service: robotek
+            component: ros-exporter
+          annotations:
+            summary: Robotek ROS graph collection failed
+            description: The ROS exporter reported one or more graph collection errors during the last fifteen minutes.
+
+        - alert: RobotekMissionStatusPublisherMissing
+          expr: |
+            (
+              max(
+                robotek_ros_topic_publishers{
+                  namespace="robotek-staging",
+                  topic="/mission/status"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+            component: mission
+          annotations:
+            summary: Mission status publisher is missing
+            description: No ROS publisher has been detected for /mission/status for more than two minutes.
+
+        - alert: RobotekOdomPublisherMissing
+          expr: |
+            (
+              max(
+                robotek_ros_topic_publishers{
+                  namespace="robotek-staging",
+                  topic="/odom"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+            component: localization
+          annotations:
+            summary: Odometry publisher is missing
+            description: No ROS publisher has been detected for /odom for more than two minutes.
+
+        - alert: RobotekLaserScanPublisherMissing
+          expr: |
+            (
+              max(
+                robotek_ros_topic_publishers{
+                  namespace="robotek-staging",
+                  topic="/scan"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: warning
+            service: robotek
+            component: perception
+          annotations:
+            summary: Laser scan publisher is missing
+            description: No ROS publisher has been detected for /scan for more than two minutes.
+
+        - alert: RobotekVelocitySafetySubscriberMissing
+          expr: |
+            (
+              max(
+                robotek_ros_topic_subscribers{
+                  namespace="robotek-staging",
+                  topic="/cmd_vel_requested"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+            component: safety
+          annotations:
+            summary: Velocity safety subscriber is missing
+            description: No ROS subscriber has been detected for /cmd_vel_requested for more than two minutes.
+
+        - alert: RobotekEmergencyStopSubscriberMissing
+          expr: |
+            (
+              max(
+                robotek_ros_topic_subscribers{
+                  namespace="robotek-staging",
+                  topic="/emergency_stop"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+            component: safety
+          annotations:
+            summary: Emergency-stop subscriber is missing
+            description: No ROS subscriber has been detected for /emergency_stop for more than two minutes.
