@@ -1,18 +1,13 @@
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import List
 
 import rclpy
 from rclpy.node import Node
 
 
 def escape_label(value: str) -> str:
-    return (
-        value.replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", "\\n")
-    )
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 class RobotekRosExporter(Node):
@@ -32,17 +27,11 @@ class RobotekRosExporter(Node):
 
     def refresh_metrics(self) -> None:
         try:
-            nodes = sorted(
-                set(self.get_node_names_and_namespaces())
-            )
+            nodes = sorted(set(self.get_node_names_and_namespaces()))
 
-            topics = sorted(
-                topic
-                for topic, _types
-                in self.get_topic_names_and_types()
-            )
+            topics = sorted(topic for topic, _types in self.get_topic_names_and_types())
 
-            lines: List[str] = [
+            lines: list[str] = [
                 "# HELP robotek_ros_exporter_up Whether the ROS exporter is operational.",
                 "# TYPE robotek_ros_exporter_up gauge",
                 "robotek_ros_exporter_up 1",
@@ -63,14 +52,9 @@ class RobotekRosExporter(Node):
                 if namespace == "/":
                     full_name = f"/{node_name}"
                 else:
-                    full_name = (
-                        f"{namespace.rstrip('/')}/{node_name}"
-                    )
+                    full_name = f"{namespace.rstrip('/')}/{node_name}"
 
-                lines.append(
-                    'robotek_ros_node_up'
-                    f'{{node="{escape_label(full_name)}"}} 1'
-                )
+                lines.append(f'robotek_ros_node_up{{node="{escape_label(full_name)}"}} 1')
 
             lines.extend(
                 [
@@ -84,9 +68,7 @@ class RobotekRosExporter(Node):
                 publishers = self.count_publishers(topic)
 
                 lines.append(
-                    "robotek_ros_topic_publishers"
-                    f'{{topic="{escape_label(topic)}"}} '
-                    f"{publishers}"
+                    f'robotek_ros_topic_publishers{{topic="{escape_label(topic)}"}} {publishers}'
                 )
 
             lines.extend(
@@ -101,9 +83,7 @@ class RobotekRosExporter(Node):
                 subscribers = self.count_subscribers(topic)
 
                 lines.append(
-                    "robotek_ros_topic_subscribers"
-                    f'{{topic="{escape_label(topic)}"}} '
-                    f"{subscribers}"
+                    f'robotek_ros_topic_subscribers{{topic="{escape_label(topic)}"}} {subscribers}'
                 )
 
             lines.extend(
@@ -111,10 +91,7 @@ class RobotekRosExporter(Node):
                     "",
                     "# HELP robotek_ros_collection_errors_total Total ROS graph collection errors.",
                     "# TYPE robotek_ros_collection_errors_total counter",
-                    (
-                        "robotek_ros_collection_errors_total "
-                        f"{self._collection_errors}"
-                    ),
+                    (f"robotek_ros_collection_errors_total {self._collection_errors}"),
                     "",
                 ]
             )
@@ -124,9 +101,7 @@ class RobotekRosExporter(Node):
         except Exception as error:
             self._collection_errors += 1
 
-            self.get_logger().error(
-                f"ROS graph collection failed: {error}"
-            )
+            self.get_logger().error(f"ROS graph collection failed: {error}")
 
             rendered = "\n".join(
                 [
@@ -136,10 +111,7 @@ class RobotekRosExporter(Node):
                     "",
                     "# HELP robotek_ros_collection_errors_total Total ROS graph collection errors.",
                     "# TYPE robotek_ros_collection_errors_total counter",
-                    (
-                        "robotek_ros_collection_errors_total "
-                        f"{self._collection_errors}"
-                    ),
+                    (f"robotek_ros_collection_errors_total {self._collection_errors}"),
                     "",
                 ]
             )
@@ -225,9 +197,7 @@ def main(args=None) -> None:
 
     server_thread.start()
 
-    exporter.get_logger().info(
-        f"Robotek ROS metrics listening on port {port}"
-    )
+    exporter.get_logger().info(f"Robotek ROS metrics listening on port {port}")
 
     try:
         rclpy.spin(exporter)
