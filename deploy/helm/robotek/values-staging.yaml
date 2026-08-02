@@ -11,7 +11,7 @@ podLabels:
   environment: staging
 
 observability:
-  enabled: false
+  enabled: true
 
 resources:
   requests:
