@@ -63,18 +63,20 @@ spec:
 
         - alert: RobotekImagePullFailure
           expr: |
-            kube_pod_container_status_waiting_reason{
-              namespace="robotek-staging",
-              pod=~"robotek-staging-.*",
-              reason=~"ImagePullBackOff|ErrImagePull"
-            } > 0
+            max by (namespace, pod, container) (
+              kube_pod_container_status_waiting_reason{
+                namespace="robotek-staging",
+                pod=~"robotek-staging-.*",
+                reason=~"ImagePullBackOff|ErrImagePull"
+              }
+            ) > 0
           for: 2m
           labels:
             severity: critical
             service: robotek
           annotations:
             summary: Robotek image pull failure
-            description: Robotek container {{ "{{" }} $labels.container {{ "}}" }} in Pod {{ "{{" }} $labels.pod {{ "}}" }} cannot pull its configured image. Reason={{ "{{" }} $labels.reason {{ "}}" }}.
+            description: Robotek container {{ "{{" }} $labels.container {{ "}}" }} in Pod {{ "{{" }} $labels.pod {{ "}}" }} cannot pull its configured image.
 
         - alert: RobotekArgoCDOutOfSync
           expr: |
