@@ -1,0 +1,119 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: robotek-staging-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+spec:
+  groups:
+    - name: robotek.staging
+      rules:
+        - alert: RobotekDeploymentUnavailable
+          expr: |
+            kube_deployment_status_replicas_unavailable{
+              namespace="robotek-staging",
+              deployment="robotek-staging"
+            } > 0
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+          annotations:
+            summary: Robotek deployment has unavailable replicas
+            description: The Robotek staging Deployment has had unavailable replicas for more than two minutes.
+
+        - alert: RobotekPodNotReady
+          expr: |
+            (
+              sum(
+                kube_pod_status_ready{
+                  namespace="robotek-staging",
+                  pod=~"robotek-staging-.*",
+                  condition="true"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+          annotations:
+            summary: Robotek Pod is not Ready
+            description: No Robotek staging Pod has been Ready for more than two minutes.
+
+        - alert: RobotekContainerRestarting
+          expr: |
+            sum(
+              increase(
+                kube_pod_container_status_restarts_total{
+                  namespace="robotek-staging",
+                  pod=~"robotek-staging-.*",
+                  container!=""
+                }[15m]
+              )
+            ) > 0
+          for: 1m
+          labels:
+            severity: warning
+            service: robotek
+          annotations:
+            summary: Robotek container restarted
+            description: A Robotek staging container restarted during the last fifteen minutes.
+
+        - alert: RobotekImagePullFailure
+          expr: |
+            max(
+              kube_pod_container_status_waiting_reason{
+                namespace="robotek-staging",
+                pod=~"robotek-staging-.*",
+                reason=~"ImagePullBackOff|ErrImagePull"
+              }
+            ) > 0
+          for: 2m
+          labels:
+            severity: critical
+            service: robotek
+          annotations:
+            summary: Robotek image pull failure
+            description: A Robotek staging container cannot pull its configured image.
+
+        - alert: RobotekArgoCDOutOfSync
+          expr: |
+            (
+              max(
+                argocd_app_info{
+                  name="robotek-staging",
+                  sync_status="Synced"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 5m
+          labels:
+            severity: warning
+            service: robotek
+          annotations:
+            summary: Robotek Argo CD application is out of sync
+            description: The Robotek staging Argo CD Application has not been synchronized for five minutes.
+
+        - alert: RobotekArgoCDUnhealthy
+          expr: |
+            (
+              max(
+                argocd_app_info{
+                  name="robotek-staging",
+                  health_status="Healthy"
+                }
+              )
+              or vector(0)
+            ) < 1
+          for: 5m
+          labels:
+            severity: critical
+            service: robotek
+          annotations:
+            summary: Robotek Argo CD application is unhealthy
+            description: The Robotek staging Argo CD Application has not been healthy for five minutes.
