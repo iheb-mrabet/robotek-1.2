@@ -84,7 +84,9 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && cp -a "${PATCH_DIR}/wheel-0.46.3.dist-info" "${VENDOR_DIR}/" \
     && rm -rf "${PATCH_DIR}" \
     && /opt/ci-venv/bin/python -m pip check \
-    && python3 -c 'import importlib.metadata as m; import pkg_resources; import jaraco.context, jaraco.text, wheel; assert m.version("jaraco.context") == "6.1.0"; assert m.version("wheel") == "0.46.3"'
+    && grep -qx 'Version: 6.1.0' "${VENDOR_DIR}/jaraco_context-6.1.0.dist-info/METADATA" \
+    && grep -qx 'Version: 0.46.3' "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA" \
+    && VENDOR_DIR="${VENDOR_DIR}" python3 -c 'import os, pathlib, pkg_resources; import jaraco.context, jaraco.text, wheel; vendor = pathlib.Path(os.environ["VENDOR_DIR"]).resolve(); assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in (jaraco.context, jaraco.text, wheel))'
 
 ENV PATH="/opt/ci-venv/bin:${PATH}"
 
