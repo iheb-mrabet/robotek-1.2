@@ -16,5 +16,4 @@ setup(
     maintainer_email="developer@example.com",
     description="Launch, integration, and headless simulation tests for the mock robot.",
     license="Apache-2.0",
-    tests_require=["pytest"],
 )
