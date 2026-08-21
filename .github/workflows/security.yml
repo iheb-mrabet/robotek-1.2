@@ -164,27 +164,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=security-ci-image
           provenance: false
 
-      - name: Inspect pip vendored dependency inventory
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          docker run --rm \
-            --user 0 \
-            --entrypoint /bin/bash \
-            "${SECURITY_CI_IMAGE}" \
-            -lc '
-              /opt/ci-venv/bin/python -m pip --version
-              grep -n -A 8 -B 2 -E '\''"name": "(msgpack|setuptools)"'\'' \
-                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/bom.cdx.json
-              find \
-                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/msgpack \
-                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/pkg_resources \
-                -type f \
-                -print \
-                | sort
-            '
-
       - name: Scan ROS and apt packages in CI image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
