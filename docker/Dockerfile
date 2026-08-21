@@ -71,8 +71,8 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         "${PIP_VENDOR_DIR}/pkg_resources" \
     && cp -a "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
     && cp -a "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
-    && cmp -r "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
-    && cmp -r "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
+    && diff -qr "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
+    && diff -qr "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
     && PIP_BOM="${PIP_VENDOR_DIR}/bom.cdx.json" \
     && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); raw = path.read_text().replace("pkg:pypi/msgpack@1.1.2", "pkg:pypi/msgpack@1.2.1").replace("pkg:pypi/setuptools@70.3.0", "pkg:pypi/setuptools@78.1.1"); data = json.loads(raw); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1"}; [component.update({"version": fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
     && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
