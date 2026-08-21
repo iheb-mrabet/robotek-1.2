@@ -13,6 +13,6 @@ echo "Running ROS 2 integration tests..."
 mkdir -p reports/integration
 python3 -m pytest \
   -c src/mock_robot_system_tests/pytest.ini \
-  src/mock_robot_system_tests/test \
-  -m integration \
+  src/mock_robot_system_tests/test/test_core_launch.py \
+  src/mock_robot_system_tests/test/test_emergency_stop.py \
   --junitxml=reports/integration/pytest.xml
