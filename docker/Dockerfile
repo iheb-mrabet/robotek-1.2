@@ -55,7 +55,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
         --upgrade \
-        pip \
+        "pip==26.2.1" \
         "setuptools==78.1.1" \
         "msgpack==1.2.1" \
     && /opt/ci-venv/bin/python -m pip install \
@@ -63,6 +63,18 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         pytest-cov==7.1.0 \
         PyYAML==6.0.3 \
         ruff==0.15.21 \
+    && PIP_VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pip; print(pathlib.Path(pip.__file__).parent / "_vendor")')" \
+    && MSGPACK_DIR="$(/opt/ci-venv/bin/python -c 'import msgpack, pathlib; print(pathlib.Path(msgpack.__file__).parent)')" \
+    && PKG_RESOURCES_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pkg_resources; print(pathlib.Path(pkg_resources.__file__).parent)')" \
+    && rm -rf \
+        "${PIP_VENDOR_DIR}/msgpack" \
+        "${PIP_VENDOR_DIR}/pkg_resources" \
+    && cp -a "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
+    && cp -a "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
+    && cmp -r "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
+    && cmp -r "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
+    && PIP_BOM="${PIP_VENDOR_DIR}/bom.cdx.json" \
+    && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); raw = path.read_text().replace("pkg:pypi/msgpack@1.1.2", "pkg:pypi/msgpack@1.2.1").replace("pkg:pypi/setuptools@70.3.0", "pkg:pypi/setuptools@78.1.1"); data = json.loads(raw); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1"}; [component.update({"version": fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
     && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
     && PATCH_DIR="$(mktemp -d)" \
     && /opt/ci-venv/bin/python -m pip install \
@@ -84,6 +96,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && cp -a "${PATCH_DIR}/wheel-0.46.3.dist-info" "${VENDOR_DIR}/" \
     && rm -rf "${PATCH_DIR}" \
     && /opt/ci-venv/bin/python -m pip check \
+    && PIP_VENDOR_DIR="${PIP_VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; from pip._vendor import msgpack, pkg_resources; vendor = pathlib.Path(os.environ["PIP_VENDOR_DIR"]).resolve(); versions = {component["name"]: component["version"] for component in json.loads((vendor / "bom.cdx.json").read_text())["components"] if component["name"] in {"msgpack", "setuptools"}}; assert versions == {"msgpack": "1.2.1", "setuptools": "78.1.1"}; assert msgpack.version == (1, 2, 1); assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in (msgpack, pkg_resources))' \
     && grep -qx 'Version: 6.1.0' "${VENDOR_DIR}/jaraco_context-6.1.0.dist-info/METADATA" \
     && grep -qx 'Version: 0.46.3' "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA" \
     && VENDOR_DIR="${VENDOR_DIR}" python3 -c 'import importlib, os, pathlib, pkg_resources; import jaraco.text; vendor = pathlib.Path(os.environ["VENDOR_DIR"]).resolve(); modules = (importlib.import_module("setuptools._vendor.jaraco.context"), importlib.import_module("setuptools._vendor.jaraco.text"), importlib.import_module("setuptools._vendor.wheel")); assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in modules)'
