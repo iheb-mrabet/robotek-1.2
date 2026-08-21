@@ -10,8 +10,9 @@ source "${ROOT_DIR}/install/setup.bash"
 
 cd "${ROOT_DIR}"
 echo "Running headless Gazebo simulation tests..."
-timeout 180s colcon test \
-  --packages-select mock_robot_system_tests \
-  --event-handlers console_direct+ \
-  --pytest-args -m simulation
-colcon test-result --verbose
+mkdir -p reports/simulation
+timeout 180s python3 -m pytest \
+  -c src/mock_robot_system_tests/pytest.ini \
+  src/mock_robot_system_tests/test \
+  -m simulation \
+  --junitxml=reports/simulation/pytest.xml

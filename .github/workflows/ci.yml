@@ -83,6 +83,7 @@ jobs:
           path: |
             build/**/test_results/**/*.xml
             log/latest_test/**
+            reports/unit/**/*.xml
           if-no-files-found: warn
           retention-days: 14
 
@@ -125,6 +126,7 @@ jobs:
           path: |
             build/**/test_results/**/*.xml
             log/latest_test/**
+            reports/integration/**/*.xml
           if-no-files-found: warn
           retention-days: 14
 
@@ -162,6 +164,7 @@ jobs:
           path: |
             build/**/test_results/**/*.xml
             log/latest_test/**
+            reports/simulation/**/*.xml
           if-no-files-found: warn
           retention-days: 14
 

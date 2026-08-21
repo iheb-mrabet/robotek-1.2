@@ -16,7 +16,6 @@ setup(
     maintainer_email="developer@example.com",
     description="Python mission behavior and action server for the mock robot.",
     license="Apache-2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "mission_manager = mock_robot_behavior.mission_manager:main",
