@@ -64,20 +64,27 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         PyYAML==6.0.3 \
         ruff==0.15.21 \
     && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
-    && rm -rf \
-        "${VENDOR_DIR}/jaraco.context-5.3.0.dist-info" \
-        "${VENDOR_DIR}/jaraco_context-5.3.0.dist-info" \
-        "${VENDOR_DIR}/wheel-0.45.1.dist-info" \
+    && PATCH_DIR="$(mktemp -d)" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
-        --upgrade \
         --no-deps \
-        --target "${VENDOR_DIR}" \
+        --target "${PATCH_DIR}" \
         "jaraco.context==6.1.0" \
         "wheel==0.46.3" \
+    && rm -rf \
+        "${VENDOR_DIR}/jaraco/context.py" \
+        "${VENDOR_DIR}/jaraco/context" \
+        "${VENDOR_DIR}/jaraco.context-5.3.0.dist-info" \
+        "${VENDOR_DIR}/jaraco_context-5.3.0.dist-info" \
+        "${VENDOR_DIR}/wheel" \
+        "${VENDOR_DIR}/wheel-0.45.1.dist-info" \
+    && cp -a "${PATCH_DIR}/jaraco/context" "${VENDOR_DIR}/jaraco/" \
+    && cp -a "${PATCH_DIR}/jaraco_context-6.1.0.dist-info" "${VENDOR_DIR}/" \
+    && cp -a "${PATCH_DIR}/wheel" "${VENDOR_DIR}/" \
+    && cp -a "${PATCH_DIR}/wheel-0.46.3.dist-info" "${VENDOR_DIR}/" \
+    && rm -rf "${PATCH_DIR}" \
     && /opt/ci-venv/bin/python -m pip check \
-    && test -f "${VENDOR_DIR}/jaraco_context-6.1.0.dist-info/METADATA" \
-    && test -f "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA"
+    && python3 -c 'import importlib.metadata as m; import pkg_resources; import jaraco.context, jaraco.text, wheel; assert m.version("jaraco.context") == "6.1.0"; assert m.version("wheel") == "0.46.3"'
 
 ENV PATH="/opt/ci-venv/bin:${PATH}"
 
@@ -87,6 +94,7 @@ COPY src /tmp/robot-src
 
 RUN rosdep update \
     && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
     && rosdep install \
         --from-paths /tmp/robot-src \
         --ignore-src \
