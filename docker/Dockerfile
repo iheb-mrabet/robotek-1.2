@@ -86,6 +86,7 @@ RUN rosdep init 2>/dev/null || true
 COPY src /tmp/robot-src
 
 RUN rosdep update \
+    && apt-get update \
     && rosdep install \
         --from-paths /tmp/robot-src \
         --ignore-src \
