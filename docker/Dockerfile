@@ -46,6 +46,8 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         --no-cache-dir \
         --upgrade \
         pip \
+        "setuptools>=78.1.1" \
+        "msgpack>=1.2.1" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
         pytest-cov==7.1.0 \
