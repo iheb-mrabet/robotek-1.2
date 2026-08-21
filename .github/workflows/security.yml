@@ -164,6 +164,29 @@ jobs:
           cache-to: type=gha,mode=max,scope=security-ci-image
           provenance: false
 
+      - name: Locate embedded third-party SBOMs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            --user 0 \
+            --entrypoint /bin/bash \
+            "${SECURITY_CI_IMAGE}" \
+            -lc '
+              find / -xdev -type f \
+                \( \
+                  -iname "*sbom*" -o \
+                  -iname "*cyclonedx*" -o \
+                  -iname "bom.json" -o \
+                  -iname "*.cdx.json" \
+                \) \
+                -print 2>/dev/null
+
+              find / -xdev -type f -name "*.json" -size -50M \
+                -exec grep -Il bomFormat {} + 2>/dev/null || true
+            '
+
       - name: Scan ROS and apt packages in CI image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
