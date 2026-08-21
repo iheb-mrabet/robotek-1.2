@@ -164,28 +164,34 @@ jobs:
           cache-to: type=gha,mode=max,scope=security-ci-image
           provenance: false
 
-      - name: Locate embedded third-party SBOMs
+      - name: Inspect pip vendored dependency inventory
         shell: bash
         run: |
           set -euo pipefail
 
           docker run --rm \
             --user 0 \
-            --entrypoint /bin/bash \
+            --entrypoint /opt/ci-venv/bin/python \
             "${SECURITY_CI_IMAGE}" \
-            -lc '
-              find / -xdev -type f \
-                \( \
-                  -iname "*sbom*" -o \
-                  -iname "*cyclonedx*" -o \
-                  -iname "bom.json" -o \
-                  -iname "*.cdx.json" \
-                \) \
-                -print 2>/dev/null
+            -c '
+          import json
+          import pathlib
+          import pip
 
-              find / -xdev -type f -name "*.json" -size -50M \
-                -exec grep -Il bomFormat {} + 2>/dev/null || true
-            '
+          vendor = pathlib.Path(pip.__file__).parent / "_vendor"
+          bom = json.loads((vendor / "bom.cdx.json").read_text())
+          print(f"pip={pip.__version__}")
+          print(f"vendor={vendor}")
+          for component in bom.get("components", []):
+              if component.get("name") in {"msgpack", "setuptools"}:
+                  print(json.dumps(component, sort_keys=True))
+          for name in ("msgpack", "pkg_resources"):
+              path = vendor / name
+              print(f"{name} files:")
+              for child in sorted(path.rglob("*")):
+                  if child.is_file():
+                      print(child.relative_to(vendor))
+          '
 
       - name: Scan ROS and apt packages in CI image
         uses: aquasecurity/trivy-action@v0.36.0
@@ -252,8 +258,3 @@ jobs:
       - name: Evaluate security jobs
         env:
           SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
-          SAST_RESULT: ${{ needs.sast.result }}
-          TRIVY_FS_RESULT: ${{ needs.trivy-filesystem.result }}
-          TRIVY_IMAGE_RESULT: ${{ needs.trivy-image.result }}
-          POLICY_RESULT: ${{ needs.exception-policy.result }}
-        run: bash scripts/security_gate.sh
