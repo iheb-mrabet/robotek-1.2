@@ -10,8 +10,9 @@ source "${ROOT_DIR}/install/setup.bash"
 
 cd "${ROOT_DIR}"
 echo "Running ROS 2 integration tests..."
-colcon test \
-  --packages-select mock_robot_system_tests \
-  --event-handlers console_direct+ \
-  --pytest-args -m integration
-colcon test-result --verbose
+mkdir -p reports/integration
+python3 -m pytest \
+  -c src/mock_robot_system_tests/pytest.ini \
+  src/mock_robot_system_tests/test \
+  -m integration \
+  --junitxml=reports/integration/pytest.xml
