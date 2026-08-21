@@ -66,6 +66,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && PIP_VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pip; print(pathlib.Path(pip.__file__).parent / "_vendor")')" \
     && MSGPACK_DIR="$(/opt/ci-venv/bin/python -c 'import msgpack, pathlib; print(pathlib.Path(msgpack.__file__).parent)')" \
     && PKG_RESOURCES_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pkg_resources; print(pathlib.Path(pkg_resources.__file__).parent)')" \
+    && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
     && rm -rf \
         "${PIP_VENDOR_DIR}/msgpack" \
         "${PIP_VENDOR_DIR}/pkg_resources" \
@@ -74,10 +75,9 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && diff -qr "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
     && diff -qr "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
     && PIP_PKG_RESOURCES="${PIP_VENDOR_DIR}/pkg_resources/__init__.py" \
-    && PIP_PKG_RESOURCES="${PIP_PKG_RESOURCES}" /opt/ci-venv/bin/python -c 'import os, pathlib; path = pathlib.Path(os.environ["PIP_PKG_RESOURCES"]); text = path.read_text(); old = "os.path.dirname(os.path.dirname(__file__))"; new = "os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))"; assert text.count(old) == 1; path.write_text(text.replace(old, new))' \
+    && PIP_PKG_RESOURCES="${PIP_PKG_RESOURCES}" VENDOR_DIR="${VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import os, pathlib; path = pathlib.Path(os.environ["PIP_PKG_RESOURCES"]); text = path.read_text(); old = "os.path.join(os.path.dirname(os.path.dirname(__file__)), '\''setuptools'\'', '\''_vendor'\'')"; new = repr(os.environ["VENDOR_DIR"]); assert text.count(old) == 1; path.write_text(text.replace(old, new))' \
     && PIP_BOM="${PIP_VENDOR_DIR}/bom.cdx.json" \
     && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); raw = path.read_text().replace("pkg:pypi/msgpack@1.1.2", "pkg:pypi/msgpack@1.2.1").replace("pkg:pypi/setuptools@70.3.0", "pkg:pypi/setuptools@78.1.1"); data = json.loads(raw); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1"}; [component.update({"version": fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
-    && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
     && PATCH_DIR="$(mktemp -d)" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
