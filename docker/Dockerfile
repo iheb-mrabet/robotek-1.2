@@ -41,6 +41,16 @@ RUN apt-get update \
         ros-${ROS_DISTRO}-xacro \
     && rm -rf /var/lib/apt/lists/*
 
+# The ROS base image also carries global Python packages. Patch those in place so
+# an image-wide Trivy scan does not retain vulnerable setuptools/msgpack copies.
+RUN python3 -m pip install \
+        --break-system-packages \
+        --no-cache-dir \
+        --upgrade \
+        "setuptools==78.1.1" \
+        "msgpack==1.2.1" \
+    && python3 -c 'import importlib.metadata as m; assert m.version("setuptools") == "78.1.1"; assert m.version("msgpack") == "1.2.1"'
+
 RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
@@ -53,7 +63,20 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         pytest-cov==7.1.0 \
         PyYAML==6.0.3 \
         ruff==0.15.21 \
-    && /opt/ci-venv/bin/python -m pip check
+    && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
+    && rm -rf \
+        "${VENDOR_DIR}/jaraco.context-5.3.0.dist-info" \
+        "${VENDOR_DIR}/wheel-0.45.1.dist-info" \
+    && /opt/ci-venv/bin/python -m pip install \
+        --no-cache-dir \
+        --upgrade \
+        --no-deps \
+        --target "${VENDOR_DIR}" \
+        "jaraco.context==6.1.0" \
+        "wheel==0.46.3" \
+    && /opt/ci-venv/bin/python -m pip check \
+    && test -f "${VENDOR_DIR}/jaraco.context-6.1.0.dist-info/METADATA" \
+    && test -f "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA"
 
 ENV PATH="/opt/ci-venv/bin:${PATH}"
 
