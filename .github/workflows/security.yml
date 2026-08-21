@@ -171,27 +171,19 @@ jobs:
 
           docker run --rm \
             --user 0 \
-            --entrypoint /opt/ci-venv/bin/python \
+            --entrypoint /bin/bash \
             "${SECURITY_CI_IMAGE}" \
-            -c '
-          import json
-          import pathlib
-          import pip
-
-          vendor = pathlib.Path(pip.__file__).parent / "_vendor"
-          bom = json.loads((vendor / "bom.cdx.json").read_text())
-          print(f"pip={pip.__version__}")
-          print(f"vendor={vendor}")
-          for component in bom.get("components", []):
-              if component.get("name") in {"msgpack", "setuptools"}:
-                  print(json.dumps(component, sort_keys=True))
-          for name in ("msgpack", "pkg_resources"):
-              path = vendor / name
-              print(f"{name} files:")
-              for child in sorted(path.rglob("*")):
-                  if child.is_file():
-                      print(child.relative_to(vendor))
-          '
+            -lc '
+              /opt/ci-venv/bin/python -m pip --version
+              grep -n -A 8 -B 2 -E '\''"name": "(msgpack|setuptools)"'\'' \
+                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/bom.cdx.json
+              find \
+                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/msgpack \
+                /opt/ci-venv/lib/python3.12/site-packages/pip/_vendor/pkg_resources \
+                -type f \
+                -print \
+                | sort
+            '
 
       - name: Scan ROS and apt packages in CI image
         uses: aquasecurity/trivy-action@v0.36.0
@@ -258,3 +250,8 @@ jobs:
       - name: Evaluate security jobs
         env:
           SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
+          SAST_RESULT: ${{ needs.sast.result }}
+          TRIVY_FS_RESULT: ${{ needs.trivy-filesystem.result }}
+          TRIVY_IMAGE_RESULT: ${{ needs.trivy-image.result }}
+          POLICY_RESULT: ${{ needs.exception-policy.result }}
+        run: bash scripts/security_gate.sh
