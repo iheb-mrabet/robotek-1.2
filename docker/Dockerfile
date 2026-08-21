@@ -66,6 +66,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
     && rm -rf \
         "${VENDOR_DIR}/jaraco.context-5.3.0.dist-info" \
+        "${VENDOR_DIR}/jaraco_context-5.3.0.dist-info" \
         "${VENDOR_DIR}/wheel-0.45.1.dist-info" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
@@ -75,7 +76,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         "jaraco.context==6.1.0" \
         "wheel==0.46.3" \
     && /opt/ci-venv/bin/python -m pip check \
-    && test -f "${VENDOR_DIR}/jaraco.context-6.1.0.dist-info/METADATA" \
+    && test -f "${VENDOR_DIR}/jaraco_context-6.1.0.dist-info/METADATA" \
     && test -f "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA"
 
 ENV PATH="/opt/ci-venv/bin:${PATH}"
