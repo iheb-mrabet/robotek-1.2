@@ -11,20 +11,28 @@ container="${3:-robotek}"
 pod="$(
   kubectl -n "$namespace" get pods \
     -l app.kubernetes.io/instance="$application" \
-    --field-selector=status.phase=Running \
-    -o jsonpath='{.items[0].metadata.name}'
+    -o json |
+    jq -r --arg container "$container" '
+      [
+        .items[]
+        | select(.status.phase == "Running")
+        | select(
+            any(.spec.containers[]?; .name == $container)
+          )
+        | select(
+            all(.status.containerStatuses[]?; .ready == true)
+          )
+      ]
+      | sort_by(.metadata.creationTimestamp)
+      | last
+      | .metadata.name // empty
+    '
 )"
 
 if [[ -z "$pod" ]]; then
-  echo "No running Robotek Pod found." >&2
-  exit 1
-fi
-
-if ! kubectl -n "$namespace" get pod "$pod" \
-  -o jsonpath='{range .spec.containers[*]}{.name}{"\n"}{end}' |
-  grep -Fxq "$container"
-then
-  echo "Container not found in Pod: $container" >&2
+  echo \
+    "No Ready Robotek Pod with container '$container' found." \
+    >&2
   exit 1
 fi
 
