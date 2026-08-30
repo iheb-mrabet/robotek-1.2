@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Robotek live delivery robot dashboard" />
+    <title>Robotek Operations</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">LIVE OPERATIONS</p>
+          <h1>Robotek Delivery Robot</h1>
+          <p class="subtitle">A temporary interface deployed automatically through the Robotek CI/CD platform.</p>
+        </div>
+        <div class="release" aria-label="deployment information">
+          <span>DEPLOYMENT</span>
+          <strong id="release">loading…</strong>
+        </div>
+      </header>
+
+      <section class="status-strip" aria-live="polite">
+        <span class="pulse"></span>
+        <strong id="connection">Connecting to Robotek…</strong>
+        <span id="updated">Waiting for telemetry</span>
+      </section>
+
+      <section class="grid" aria-label="robot telemetry">
+        <article class="card primary">
+          <p class="label">Robot status</p>
+          <p class="value" id="status">—</p>
+          <p class="detail">K3s staging environment</p>
+        </article>
+        <article class="card">
+          <p class="label">Battery</p>
+          <p class="value"><span id="battery">—</span><small>%</small></p>
+          <div class="meter"><span id="battery-meter"></span></div>
+        </article>
+        <article class="card">
+          <p class="label">Active mission</p>
+          <p class="value compact" id="mission">—</p>
+          <p class="detail" id="destination">No destination</p>
+        </article>
+        <article class="card">
+          <p class="label">Completed deliveries</p>
+          <p class="value" id="deliveries">—</p>
+          <p class="detail">Current staging session</p>
+        </article>
+      </section>
+
+      <footer>
+        <span>ROS 2 · Docker · Kubernetes · Helm · Argo CD</span>
+        <span>Prepared by Iheb Mrabet</span>
+      </footer>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

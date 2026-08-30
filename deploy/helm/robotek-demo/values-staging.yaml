@@ -1,0 +1,15 @@
+images:
+  frontend:
+    repository: ihebmrabet/robotek-demo-frontend
+    tag: latest
+  backend:
+    repository: ihebmrabet/robotek-demo-backend
+    tag: latest
+  database:
+    repository: ihebmrabet/robotek-demo-database
+    tag: latest
+
+imagePullPolicy: Always
+
+frontend:
+  nodePort: 30080

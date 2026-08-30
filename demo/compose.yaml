@@ -1,0 +1,39 @@
+services:
+  database:
+    build:
+      context: ./database
+    image: ihebmrabet/robotek-demo-database:local
+    environment:
+      POSTGRES_DB: robotek
+      POSTGRES_USER: robotek
+      POSTGRES_PASSWORD: robotek-demo-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U robotek -d robotek"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    image: ihebmrabet/robotek-demo-backend:local
+    environment:
+      DATABASE_URL: postgresql://robotek:robotek-demo-password@database:5432/robotek
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: ./frontend
+    image: ihebmrabet/robotek-demo-frontend:local
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy

@@ -1,0 +1,31 @@
+images:
+  frontend:
+    repository: ihebmrabet/robotek-demo-frontend
+    tag: latest
+  backend:
+    repository: ihebmrabet/robotek-demo-backend
+    tag: latest
+  database:
+    repository: ihebmrabet/robotek-demo-database
+    tag: latest
+
+imagePullPolicy: Always
+
+database:
+  name: robotek
+  user: robotek
+  password: robotek-demo-password
+
+frontend:
+  nodePort: 30080
+
+resources:
+  frontend:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { cpu: 150m, memory: 96Mi }
+  backend:
+    requests: { cpu: 40m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 192Mi }
+  database:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 300m, memory: 256Mi }
