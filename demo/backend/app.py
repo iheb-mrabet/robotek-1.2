@@ -23,6 +23,13 @@ PROMETHEUS_QUERIES = {
     "ros_collection_errors": (
         'max(robotek_ros_collection_errors_total{namespace="robotek-staging"})'
     ),
+    "robot_runtime_uptime_seconds": (
+        'time() - max(kube_pod_start_time{namespace="robotek-staging"})'
+    ),
+    "robot_container_restarts": (
+        'sum(kube_pod_container_status_restarts_total{'
+        'namespace="robotek-staging",container="robotek"})'
+    ),
     "ros_node_details": (
         'robotek_ros_node_up{namespace="robotek-staging"}'
     ),
@@ -37,11 +44,14 @@ PROMETHEUS_QUERIES = {
     ),
     "cluster_nodes_total": "count(kube_node_info)",
     "cluster_pods_ready": (
-        'sum(kube_pod_status_ready{'
-        'namespace=~"robotek-staging|robotek-demo",condition="true"})'
+        'sum((kube_pod_status_ready{'
+        'namespace=~"robotek-staging|robotek-demo",condition="true"} == 1) '
+        'unless on(namespace,pod) kube_pod_deletion_timestamp)'
     ),
     "cluster_pods_total": (
-        'count(kube_pod_info{namespace=~"robotek-staging|robotek-demo"})'
+        'count((kube_pod_status_phase{'
+        'namespace=~"robotek-staging|robotek-demo",phase=~"Pending|Running"} == 1) '
+        'unless on(namespace,pod) kube_pod_deletion_timestamp)'
     ),
     "deployments_available": (
         'sum(kube_deployment_status_replicas_available{'
@@ -58,6 +68,7 @@ PROMETHEUS_QUERIES = {
         '100 * (1 - sum(node_memory_MemAvailable_bytes) '
         '/ sum(node_memory_MemTotal_bytes))'
     ),
+    "cluster_uptime_seconds": "time() - max(node_boot_time_seconds)",
     "gitops_synced": (
         'sum(argocd_app_info{'
         'name=~"robotek-staging|robotek-demo",sync_status="Synced"})'
@@ -326,6 +337,12 @@ def collect_platform() -> dict[str, object]:
             "collection_errors": _integer(
                 scalar["ros_collection_errors"]
             ),
+            "runtime_uptime_seconds": _integer(
+                scalar["robot_runtime_uptime_seconds"]
+            ),
+            "container_restarts": _integer(
+                scalar["robot_container_restarts"]
+            ),
             "node_names": _node_names(results["ros_node_details"]),
             "topic_details": _topic_details(
                 results["ros_topic_publishers"],
@@ -349,6 +366,9 @@ def collect_platform() -> dict[str, object]:
             ),
             "memory_percent": _percentage(
                 scalar["cluster_memory_percent"]
+            ),
+            "uptime_seconds": _integer(
+                scalar["cluster_uptime_seconds"]
             ),
         },
         "observability": {
