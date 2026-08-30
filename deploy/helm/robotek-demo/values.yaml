@@ -19,6 +19,11 @@ database:
 frontend:
   nodePort: 30080
 
+observability:
+  prometheusInternalUrl: http://robotek-monitoring-prometheus.monitoring.svc.cluster.local:9090
+  grafanaPublicUrl: http://localhost:3000
+  prometheusPublicUrl: http://localhost:9090
+
 resources:
   frontend:
     requests: { cpu: 20m, memory: 32Mi }
