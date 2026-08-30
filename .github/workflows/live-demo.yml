@@ -135,7 +135,7 @@ jobs:
             --namespace robotek-demo \
             --values deploy/helm/robotek-demo/values-staging.yaml \
             > /tmp/robotek-demo.yaml
-          grep -E '^kind: (Deployment|Service|Secret)$' /tmp/robotek-demo.yaml
+          grep -E '^kind: (Deployment|Service|Secret|Role|RoleBinding)$' /tmp/robotek-demo.yaml
 
   build-and-push:
     name: Build and push ${{ matrix.component }} image
@@ -276,9 +276,25 @@ jobs:
 
       - name: Verify live webpage and API
         run: |
-          curl --fail --show-error --silent http://127.0.0.1:30080/ | grep -F "Robotek Delivery Robot"
-          curl --fail --show-error --silent http://127.0.0.1:30080/health
-          curl --fail --show-error --silent http://127.0.0.1:30080/api/robot
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/ \
+            | grep -F "Robotek Delivery Robot"
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/health \
+            | grep -F '"status":"ok"'
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/ready \
+            | grep -F '"status":"ready"'
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/api/platform \
+            | grep -F '"data_policy":"live-only"'
 
       - name: Deployment summary
         run: |
@@ -293,4 +309,6 @@ jobs:
             echo "- Helm rendering: passed"
             echo "- Argo CD synchronization: healthy"
             echo "- Live interface: reachable"
+            echo "- ROS and cluster telemetry: Prometheus-backed"
+            echo "- Data policy: live-only; unavailable sources are never simulated"
           } >> "${GITHUB_STEP_SUMMARY}"

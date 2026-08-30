@@ -3,58 +3,265 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Robotek live delivery robot dashboard" />
-    <title>Robotek Operations</title>
+    <meta
+      name="description"
+      content="Robotek live ROS 2 and Kubernetes operations dashboard"
+    />
+    <title>Robotek Operations Control</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">LIVE OPERATIONS</p>
-          <h1>Robotek Delivery Robot</h1>
-          <p class="subtitle">A temporary interface deployed automatically through the Robotek CI/CD platform.</p>
+  <body data-state="loading">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#overview" aria-label="Robotek home">
+          <span class="brand-mark">R</span>
+          <span>
+            <strong>ROBOTEK</strong>
+            <small>Operations Control</small>
+          </span>
+        </a>
+
+        <nav aria-label="Dashboard sections">
+          <a class="nav-link active" href="#overview">Overview</a>
+          <a class="nav-link" href="#cluster">Cluster</a>
+          <a class="nav-link" href="#ros-graph">ROS graph</a>
+          <a class="nav-link" href="#data-sources">Data sources</a>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="source-seal">
+          <span class="seal-dot"></span>
+          <div>
+            <strong>LIVE DATA ONLY</strong>
+            <small>No simulated telemetry</small>
+          </div>
         </div>
-        <div class="release" aria-label="deployment information">
-          <span>DEPLOYMENT</span>
-          <strong id="release">loading…</strong>
+
+        <div class="tool-links">
+          <a id="grafana-link" href="http://localhost:3000" target="_blank" rel="noreferrer">
+            Open Grafana
+          </a>
+          <a id="prometheus-link" href="http://localhost:9090" target="_blank" rel="noreferrer">
+            Open Prometheus
+          </a>
         </div>
-      </header>
 
-      <section class="status-strip" aria-live="polite">
-        <span class="pulse"></span>
-        <strong id="connection">Connecting to Robotek…</strong>
-        <span id="updated">Waiting for telemetry</span>
-      </section>
+        <p class="author">Platform by Iheb Mrabet</p>
+      </aside>
 
-      <section class="grid" aria-label="robot telemetry">
-        <article class="card primary">
-          <p class="label">Robot status</p>
-          <p class="value" id="status">—</p>
-          <p class="detail">K3s staging environment</p>
-        </article>
-        <article class="card">
-          <p class="label">Battery</p>
-          <p class="value"><span id="battery">—</span><small>%</small></p>
-          <div class="meter"><span id="battery-meter"></span></div>
-        </article>
-        <article class="card">
-          <p class="label">Active mission</p>
-          <p class="value compact" id="mission">—</p>
-          <p class="detail" id="destination">No destination</p>
-        </article>
-        <article class="card">
-          <p class="label">Completed deliveries</p>
-          <p class="value" id="deliveries">—</p>
-          <p class="detail">Current staging session</p>
-        </article>
-      </section>
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="kicker">ROBOTICS PLATFORM / STAGING</p>
+            <h1>Robotek Delivery Robot <span>Operations Control</span></h1>
+          </div>
+          <div class="topbar-meta">
+            <div class="live-pill">
+              <span class="live-dot"></span>
+              <strong id="connection-label">Connecting</strong>
+            </div>
+            <div class="release-block">
+              <span>RELEASE</span>
+              <code id="release">—</code>
+            </div>
+          </div>
+        </header>
 
-      <footer>
-        <span>ROS 2 · Docker · Kubernetes · Helm · Argo CD</span>
-        <span>Prepared by Iheb Mrabet</span>
-      </footer>
-    </main>
+        <section id="overview" class="hero-panel">
+          <div>
+            <p class="section-label">SYSTEM POSTURE</p>
+            <h2 id="platform-headline">Establishing live platform state…</h2>
+            <p id="platform-summary">
+              Querying the Robotek ROS exporter, Prometheus, Kubernetes and PostgreSQL.
+            </p>
+          </div>
+          <div class="timestamp">
+            <span>LAST VERIFIED</span>
+            <strong id="updated-at">—</strong>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="Live platform summary">
+          <article class="metric-card accent">
+            <div class="metric-heading">
+              <span>ROS exporter</span>
+              <span id="exporter-badge" class="badge neutral">WAITING</span>
+            </div>
+            <strong id="exporter-status" class="metric-value text-value">—</strong>
+            <p>Robot runtime telemetry source</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>ROS nodes</span>
+              <span class="source-tag">PROMETHEUS</span>
+            </div>
+            <strong id="ros-nodes" class="metric-value">—</strong>
+            <p>Currently discovered</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>ROS topics</span>
+              <span class="source-tag">PROMETHEUS</span>
+            </div>
+            <strong id="ros-topics" class="metric-value">—</strong>
+            <p>Currently visible</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Prometheus targets</span>
+              <span id="targets-badge" class="badge neutral">WAITING</span>
+            </div>
+            <strong id="targets" class="metric-value">—</strong>
+            <p>Healthy scrape targets</p>
+          </article>
+        </section>
+
+        <section id="cluster" class="content-grid">
+          <article class="panel telemetry-panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">K3S NODE</p>
+                <h2>Live resource utilization</h2>
+              </div>
+              <span class="source-tag">NODE EXPORTER · 5S UI REFRESH</span>
+            </div>
+
+            <div class="chart-grid">
+              <div class="chart-card">
+                <div class="chart-title">
+                  <span>CPU utilization</span>
+                  <strong id="cpu-value">—</strong>
+                </div>
+                <svg id="cpu-chart" viewBox="0 0 420 130" role="img" aria-label="Session CPU history"></svg>
+                <small>Session history built from live readings</small>
+              </div>
+              <div class="chart-card">
+                <div class="chart-title">
+                  <span>Memory utilization</span>
+                  <strong id="memory-value">—</strong>
+                </div>
+                <svg id="memory-chart" viewBox="0 0 420 130" role="img" aria-label="Session memory history"></svg>
+                <small>Session history built from live readings</small>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel readiness-panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">ORCHESTRATION</p>
+                <h2>Workload readiness</h2>
+              </div>
+            </div>
+
+            <div class="readiness-list">
+              <div>
+                <span>Kubernetes nodes</span>
+                <strong id="nodes-ready">—</strong>
+              </div>
+              <div>
+                <span>Pods</span>
+                <strong id="pods-ready">—</strong>
+              </div>
+              <div>
+                <span>Deployments</span>
+                <strong id="deployments-ready">—</strong>
+              </div>
+              <div>
+                <span>GitOps applications</span>
+                <strong id="gitops-ready">—</strong>
+              </div>
+              <div>
+                <span>PostgreSQL</span>
+                <strong id="database-state">—</strong>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section id="ros-graph" class="ros-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">ROS 2 GRAPH</p>
+                <h2>Discovered nodes</h2>
+              </div>
+              <span id="node-count-label" class="count-label">—</span>
+            </div>
+            <div id="node-list" class="node-list">
+              <p class="empty-state">Waiting for exporter data…</p>
+            </div>
+          </article>
+
+          <article class="panel topics-panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">ROS 2 GRAPH</p>
+                <h2>Topic connections</h2>
+              </div>
+              <span id="topic-count-label" class="count-label">—</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Topic</th>
+                    <th>Publishers</th>
+                    <th>Subscribers</th>
+                  </tr>
+                </thead>
+                <tbody id="topic-table">
+                  <tr>
+                    <td colspan="3" class="empty-state">Waiting for exporter data…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="data-sources" class="panel provenance-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">DATA TRUST</p>
+              <h2>Measured, not manufactured</h2>
+            </div>
+            <span class="badge good">LIVE-ONLY POLICY</span>
+          </div>
+          <div class="provenance-grid">
+            <div>
+              <strong>ROS telemetry</strong>
+              <span>Robotek exporter → Prometheus</span>
+            </div>
+            <div>
+              <strong>Cluster state</strong>
+              <span>kube-state-metrics + node-exporter</span>
+            </div>
+            <div>
+              <strong>GitOps state</strong>
+              <span>Argo CD metrics → Prometheus</span>
+            </div>
+            <div>
+              <strong>Data layer</strong>
+              <span>Live PostgreSQL connectivity check</span>
+            </div>
+          </div>
+          <p class="data-note">
+            If a source is unreachable, the dashboard displays “Unavailable.” It never inserts a fallback battery level, mission, robot status or cluster value.
+          </p>
+        </section>
+
+        <footer>
+          <span>ROS 2 · Prometheus · Grafana · Docker · Helm · Argo CD · K3s</span>
+          <span id="refresh-state">Automatic refresh every 5 seconds</span>
+        </footer>
+      </main>
+    </div>
+
     <script src="/app.js" defer></script>
   </body>
 </html>

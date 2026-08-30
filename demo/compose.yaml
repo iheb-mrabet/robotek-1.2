@@ -19,6 +19,10 @@ services:
     image: ihebmrabet/robotek-demo-backend:local
     environment:
       DATABASE_URL: postgresql://robotek:robotek-demo-password@database:5432/robotek
+      DEPLOYMENT_RELEASE: local
+      PROMETHEUS_URL: ""
+      GRAFANA_PUBLIC_URL: http://localhost:3000
+      PROMETHEUS_PUBLIC_URL: http://localhost:9090
     depends_on:
       database:
         condition: service_healthy
@@ -27,7 +31,7 @@ services:
         aliases:
           - robotek-demo-backend
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"]
       interval: 3s
       timeout: 3s
       retries: 20
