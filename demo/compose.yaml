@@ -22,6 +22,10 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - robotek-demo-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 3s
