@@ -53,3 +53,6 @@ def test_complete_frontend_backend_database_flow():
     assert payload["observability"]["prometheus_reachable"] is False
     assert payload["robot"]["nodes"] is None
     assert payload["robot"]["topics"] is None
+    assert payload["robot"]["runtime_uptime_seconds"] is None
+    assert payload["robot"]["container_restarts"] is None
+    assert payload["cluster"]["uptime_seconds"] is None

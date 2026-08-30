@@ -16,6 +16,19 @@ const displayRatio = (ready, total) =>
     ? `${ready} / ${total}`
     : "Unavailable";
 
+function displayDuration(seconds) {
+  if (!isNumber(seconds) || seconds < 0) return "Unavailable";
+
+  const total = Math.floor(seconds);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${total % 60}s`;
+}
+
 function setBadge(element, label, state) {
   element.textContent = label;
   element.className = `badge ${state}`;
@@ -200,6 +213,12 @@ function renderPlatform(payload) {
 
   byId("ros-nodes").textContent = displayNumber(robot.nodes);
   byId("ros-topics").textContent = displayNumber(robot.topics);
+  byId("robot-runtime-uptime").textContent = displayDuration(
+    robot.runtime_uptime_seconds,
+  );
+  byId("robot-restarts").textContent = displayNumber(
+    robot.container_restarts,
+  );
   byId("targets").textContent = displayRatio(
     observability.targets_up,
     observability.targets_total,
@@ -237,6 +256,9 @@ function renderPlatform(payload) {
   byId("memory-value").textContent = displayNumber(
     cluster.memory_percent,
     "%",
+  );
+  byId("cluster-uptime").textContent = displayDuration(
+    cluster.uptime_seconds,
   );
 
   addHistory(history.cpu, cluster.cpu_percent);
