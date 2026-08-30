@@ -24,6 +24,7 @@
         <nav aria-label="Dashboard sections">
           <a class="nav-link active" href="#overview">Overview</a>
           <a class="nav-link" href="#cluster">Cluster</a>
+          <a class="nav-link" href="#safety-gate">Safety gate</a>
           <a class="nav-link" href="#ros-graph">ROS graph</a>
           <a class="nav-link" href="#data-sources">Data sources</a>
         </nav>
@@ -181,6 +182,55 @@
               </div>
             </div>
           </article>
+        </section>
+
+        <section id="safety-gate" class="panel safety-panel">
+          <div class="panel-header">
+            <div>
+              <p class="section-label">NEW LIVE FEATURE</p>
+              <h2>Operational Safety Gate</h2>
+            </div>
+            <span class="source-tag">PROMETHEUS ALERTS · ROS EXPORTER</span>
+          </div>
+
+          <div class="safety-layout">
+            <div class="gate-result">
+              <span>FINAL GATE</span>
+              <strong id="safety-gate-value">—</strong>
+              <p id="safety-gate-message">
+                Waiting for complete live safety evidence…
+              </p>
+            </div>
+
+            <div class="safety-checks">
+              <div>
+                <span>Critical alerts firing</span>
+                <strong id="critical-alerts">—</strong>
+              </div>
+              <div>
+                <span>Warning alerts firing</span>
+                <strong id="warning-alerts">—</strong>
+              </div>
+              <div>
+                <span>ROS collection errors</span>
+                <strong id="collection-errors">—</strong>
+              </div>
+              <div>
+                <span>ROS exporter</span>
+                <strong id="safety-exporter">—</strong>
+              </div>
+            </div>
+
+            <div class="alert-feed">
+              <div class="alert-feed-title">
+                <span>FIRING ROBOTEK ALERTS</span>
+                <strong id="alert-count">—</strong>
+              </div>
+              <div id="alert-list">
+                <p class="empty-state">Waiting for live alert data…</p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="ros-graph" class="ros-grid">
