@@ -135,7 +135,184 @@ jobs:
             --namespace robotek-demo \
             --values deploy/helm/robotek-demo/values-staging.yaml \
             > /tmp/robotek-demo.yaml
-          grep -E '^kind: (Deployment|Service|Secret)$' /tmp/robotek-demo.yaml
+          grep -E '^kind: (Deployment|Service|Secret|Role|RoleBinding)
+
+  build-and-push:
+    name: Build and push ${{ matrix.component }} image
+    if: github.event_name != 'pull_request'
+    needs:
+      - unit-tests
+      - integration-tests
+      - orchestration
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - frontend
+          - backend
+          - database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_NAMESPACE }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push immutable and latest tags
+        uses: docker/build-push-action@v7
+        with:
+          context: demo/${{ matrix.component }}
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_NAMESPACE }}/robotek-demo-${{ matrix.component }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_NAMESPACE }}/robotek-demo-${{ matrix.component }}:latest
+          cache-from: type=gha,scope=robotek-demo-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=robotek-demo-${{ matrix.component }}
+
+      - name: Scan published image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.DOCKERHUB_NAMESPACE }}/robotek-demo-${{ matrix.component }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+  promote-gitops:
+    name: Promote images through GitOps
+    needs: build-and-push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    outputs:
+      promotion_sha: ${{ steps.commit.outputs.promotion_sha }}
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update all three image tags
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("deploy/helm/robotek-demo/values-staging.yaml")
+          tag = os.environ["IMAGE_TAG"]
+          text = path.read_text(encoding="utf-8")
+          updated, count = re.subn(r"(?m)^(\s+tag:)\s*.*$", rf"\1 {tag}", text)
+          if count != 3:
+              raise SystemExit(f"Expected three image tags, found {count}")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          grep -n 'tag:' "${VALUES_FILE}"
+
+      - name: Commit GitOps promotion
+        id: commit
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${VALUES_FILE}"
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(demo): promote live images ${IMAGE_TAG}"
+            git push origin HEAD:main
+          fi
+          echo "promotion_sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+  automated-deployment:
+    name: Argo CD automated deployment
+    needs: promote-gitops
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - robotek-staging
+      - k3s
+      - staging
+    timeout-minutes: 10
+    steps:
+      - name: Wait for Argo CD synchronization
+        env:
+          EXPECTED_REVISION: ${{ needs.promote-gitops.outputs.promotion_sha }}
+        run: |
+          for attempt in $(seq 1 60); do
+            revision="$(kubectl -n argocd get application robotek-demo -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
+            sync="$(kubectl -n argocd get application robotek-demo -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            health="$(kubectl -n argocd get application robotek-demo -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+            echo "Attempt ${attempt}: revision=${revision} sync=${sync} health=${health}"
+            if [[ "${revision}" == "${EXPECTED_REVISION}" && "${sync}" == "Synced" && "${health}" == "Healthy" ]]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Argo CD did not reach the expected healthy revision." >&2
+          exit 1
+
+      - name: Verify all Kubernetes deployments
+        run: |
+          kubectl -n robotek-demo rollout status deployment/robotek-demo-database --timeout=120s
+          kubectl -n robotek-demo rollout status deployment/robotek-demo-backend --timeout=120s
+          kubectl -n robotek-demo rollout status deployment/robotek-demo-frontend --timeout=120s
+          kubectl -n robotek-demo get pods,services
+
+      - name: Verify live webpage and API
+        run: |
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/ \
+            | grep -F "Robotek Delivery Robot"
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/health \
+            | grep -F '"status":"ok"'
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/ready \
+            | grep -F '"status":"ready"'
+
+          curl --fail --show-error --silent \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
+            http://127.0.0.1:30080/api/platform \
+            | grep -F '"data_policy":"live-only"'
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Robotek live deployment"
+            echo
+            echo "- Unit tests: passed"
+            echo "- Integration tests: passed"
+            echo "- Frontend image: Docker Hub"
+            echo "- Backend image: Docker Hub"
+            echo "- Database image: Docker Hub"
+            echo "- Helm rendering: passed"
+            echo "- Argo CD synchronization: healthy"
+            echo "- Live interface: reachable"
+            echo "- ROS and cluster telemetry: Prometheus-backed"
+            echo "- Data policy: live-only; unavailable sources are never simulated"
+          } >> "${GITHUB_STEP_SUMMARY}"
+ /tmp/robotek-demo.yaml
 
   build-and-push:
     name: Build and push ${{ matrix.component }} image
