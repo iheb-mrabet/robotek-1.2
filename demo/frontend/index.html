@@ -112,6 +112,33 @@
 
           <article class="metric-card">
             <div class="metric-heading">
+              <span>Robot runtime uptime</span>
+              <span class="source-tag">KUBE-STATE</span>
+            </div>
+            <strong id="robot-runtime-uptime" class="metric-value text-value">—</strong>
+            <p>Current ROS workload pod age</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Robot restarts</span>
+              <span class="source-tag">KUBE-STATE</span>
+            </div>
+            <strong id="robot-restarts" class="metric-value">—</strong>
+            <p>Current robot container restart count</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>K3s node uptime</span>
+              <span class="source-tag">NODE EXPORTER</span>
+            </div>
+            <strong id="cluster-uptime" class="metric-value text-value">—</strong>
+            <p>Measured from node boot time</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
               <span>Prometheus targets</span>
               <span id="targets-badge" class="badge neutral">WAITING</span>
             </div>
