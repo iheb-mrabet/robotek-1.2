@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from app import (
+    _safety_gate,
     _sample_value,
     _topic_details,
     create_app,
@@ -62,6 +63,14 @@ PLATFORM_PAYLOAD = {
         "critical_firing": 0,
         "warning_firing": 0,
         "items": [],
+    },
+    "safety": {
+        "source": "Prometheus ALERTS / Robotek ROS exporter",
+        "gate": "PASS",
+        "critical_alerts": 0,
+        "warning_alerts": 0,
+        "ros_collection_errors": 0,
+        "exporter_up": True,
     },
 }
 
@@ -140,3 +149,11 @@ def test_topic_vectors_are_merged_without_inventing_values():
             "subscribers": 1,
         },
     ]
+
+
+def test_safety_gate_uses_only_complete_live_evidence():
+    assert _safety_gate(0, 0, True) == "PASS"
+    assert _safety_gate(1, 0, True) == "FAIL"
+    assert _safety_gate(0, 1, True) == "FAIL"
+    assert _safety_gate(0, 0, False) == "FAIL"
+    assert _safety_gate(None, 0, True) == "UNAVAILABLE"
