@@ -1,5 +1,5 @@
 name: Robotek Live Demo
-run-name: Robotek Live Demo · ${{ github.event.head_commit.message }}
+run-name: Robotek Live Demo · ${{ github.event.pull_request.title || github.event.head_commit.message || 'Manual validation' }}
 
 on:
   pull_request:
