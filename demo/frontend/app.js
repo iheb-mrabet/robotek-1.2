@@ -35,7 +35,13 @@ function setBadge(element, label, state) {
 }
 
 function systemIsReady(payload) {
-  const { cluster, database, observability, robot } = payload;
+  const {
+    cluster,
+    database,
+    observability,
+    robot,
+    safety,
+  } = payload;
   return (
     robot.exporter_up === true &&
     database.connected === true &&
@@ -45,7 +51,8 @@ function systemIsReady(payload) {
     isNumber(cluster.deployments_available) &&
     cluster.deployments_available === cluster.deployments_desired &&
     isNumber(observability.gitops_healthy) &&
-    observability.gitops_healthy === observability.gitops_total
+    observability.gitops_healthy === observability.gitops_total &&
+    safety?.gate === "PASS"
   );
 }
 
@@ -168,8 +175,83 @@ function renderTopics(topics) {
   });
 }
 
+function renderSafety(safety, alerts) {
+  const panel = byId("safety-gate");
+  const gate = safety?.gate || "UNAVAILABLE";
+  panel.dataset.gate = gate.toLowerCase();
+
+  byId("safety-gate-value").textContent = gate;
+  byId("critical-alerts").textContent = displayNumber(
+    safety?.critical_alerts,
+  );
+  byId("warning-alerts").textContent = displayNumber(
+    safety?.warning_alerts,
+  );
+  byId("collection-errors").textContent = displayNumber(
+    safety?.ros_collection_errors,
+  );
+  byId("safety-exporter").textContent =
+    safety?.exporter_up === true
+      ? "ONLINE"
+      : safety?.exporter_up === false
+        ? "OFFLINE"
+        : "UNAVAILABLE";
+
+  const messages = {
+    PASS: "No critical Robotek alerts or ROS collection errors are present.",
+    FAIL: "One or more live safety conditions require attention.",
+    UNAVAILABLE: "The gate will not pass without complete live evidence.",
+  };
+  byId("safety-gate-message").textContent = messages[gate];
+
+  const list = byId("alert-list");
+  list.replaceChildren();
+  byId("alert-count").textContent = isNumber(alerts?.length)
+    ? String(alerts.length)
+    : "—";
+
+  if (!alerts?.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent =
+      gate === "UNAVAILABLE"
+        ? "Alert data is unavailable."
+        : "No firing Robotek alerts.";
+    list.append(empty);
+    return;
+  }
+
+  alerts.forEach((alert) => {
+    const row = document.createElement("div");
+    row.className = `alert-row ${alert.severity || "unknown"}`;
+
+    const indicator = document.createElement("span");
+    indicator.className = "alert-indicator";
+
+    const description = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = alert.name || "Unnamed alert";
+    const component = document.createElement("small");
+    component.textContent = alert.component || "platform";
+    description.append(name, component);
+
+    const severity = document.createElement("code");
+    severity.textContent = (alert.severity || "unknown").toUpperCase();
+
+    row.append(indicator, description, severity);
+    list.append(row);
+  });
+}
+
 function renderPlatform(payload) {
-  const { cluster, database, observability, robot } = payload;
+  const {
+    alerts,
+    cluster,
+    database,
+    observability,
+    robot,
+    safety,
+  } = payload;
   const ready = systemIsReady(payload);
 
   document.body.dataset.state = ready ? "healthy" : "attention";
@@ -268,6 +350,7 @@ function renderPlatform(payload) {
 
   renderNodes(robot.node_names || []);
   renderTopics(robot.topic_details || []);
+  renderSafety(safety, alerts?.items || []);
 
   if (observability.grafana_url) {
     byId("grafana-link").href = observability.grafana_url;
