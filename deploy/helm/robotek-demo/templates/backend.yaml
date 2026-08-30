@@ -47,19 +47,27 @@ spec:
                 secretKeyRef:
                   name: robotek-demo-database
                   key: DATABASE_URL
+            - name: DEPLOYMENT_RELEASE
+              value: {{ .Values.images.backend.tag | quote }}
+            - name: PROMETHEUS_URL
+              value: {{ .Values.observability.prometheusInternalUrl | quote }}
+            - name: GRAFANA_PUBLIC_URL
+              value: {{ .Values.observability.grafanaPublicUrl | quote }}
+            - name: PROMETHEUS_PUBLIC_URL
+              value: {{ .Values.observability.prometheusPublicUrl | quote }}
           ports:
             - name: http
               containerPort: 8000
           startupProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 24
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
