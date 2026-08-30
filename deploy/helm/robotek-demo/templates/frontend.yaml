@@ -9,7 +9,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 80
+      targetPort: 8080
       nodePort: {{ .Values.frontend.nodePort }}
 ---
 apiVersion: apps/v1
@@ -27,13 +27,25 @@ spec:
         app: robotek-demo-frontend
         app.kubernetes.io/part-of: robotek-demo
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: {{ printf "%s:%s" .Values.images.frontend.repository .Values.images.frontend.tag | quote }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           readinessProbe:
             httpGet:
               path: /
@@ -48,3 +60,9 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources.frontend | nindent 12 }}
+          volumeMounts:
+            - name: frontend-tmp
+              mountPath: /tmp
+      volumes:
+        - name: frontend-tmp
+          emptyDir: {}

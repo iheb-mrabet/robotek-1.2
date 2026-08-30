@@ -27,6 +27,13 @@ spec:
         app: robotek-demo-database
         app.kubernetes.io/part-of: robotek-demo
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: database
           image: {{ printf "%s:%s" .Values.images.database.repository .Values.images.database.tag | quote }}
@@ -34,6 +41,15 @@ spec:
           envFrom:
             - secretRef:
                 name: robotek-demo-database
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - name: postgres
               containerPort: 5432
@@ -47,6 +63,14 @@ spec:
           volumeMounts:
             - name: database-data
               mountPath: /var/lib/postgresql/data
+            - name: database-run
+              mountPath: /var/run/postgresql
+            - name: database-tmp
+              mountPath: /tmp
       volumes:
         - name: database-data
+          emptyDir: {}
+        - name: database-run
+          emptyDir: {}
+        - name: database-tmp
           emptyDir: {}
