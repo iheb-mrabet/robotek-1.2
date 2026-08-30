@@ -18,6 +18,8 @@ PLATFORM_PAYLOAD = {
         "nodes": 7,
         "topics": 11,
         "collection_errors": 0,
+        "runtime_uptime_seconds": 7200,
+        "container_restarts": 0,
         "node_names": ["/robotek_ros_exporter"],
         "topic_details": [
             {
@@ -37,6 +39,7 @@ PLATFORM_PAYLOAD = {
         "deployments_desired": 4,
         "cpu_percent": 21.4,
         "memory_percent": 48.2,
+        "uptime_seconds": 86400,
     },
     "observability": {
         "source": "Prometheus HTTP API",
@@ -95,7 +98,9 @@ def test_platform_endpoint_returns_live_data_contract():
     assert response.status_code == 200
     assert response.get_json()["data_policy"] == "live-only"
     assert response.get_json()["robot"]["nodes"] == 7
+    assert response.get_json()["robot"]["runtime_uptime_seconds"] == 7200
     assert response.get_json()["cluster"]["pods_ready"] == 4
+    assert response.get_json()["cluster"]["uptime_seconds"] == 86400
 
 
 def test_prometheus_sample_value_parsing():
