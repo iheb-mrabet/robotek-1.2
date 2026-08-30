@@ -71,12 +71,12 @@ PROMETHEUS_QUERIES = {
         '(argocd_app_info{name=~"robotek-staging|robotek-demo"}))'
     ),
     "critical_alerts": (
-        'count(ALERTS{service="robotek",severity="critical",'
-        'alertstate="firing"})'
+        '(count(ALERTS{service="robotek",severity="critical",'
+        'alertstate="firing"}) or vector(0))'
     ),
     "warning_alerts": (
-        'count(ALERTS{service="robotek",severity="warning",'
-        'alertstate="firing"})'
+        '(count(ALERTS{service="robotek",severity="warning",'
+        'alertstate="firing"}) or vector(0))'
     ),
     "alert_details": 'ALERTS{service="robotek",alertstate="firing"}',
 }
@@ -272,6 +272,26 @@ def _alert_details(
     )
 
 
+def _safety_gate(
+    critical_alerts: int | None,
+    collection_errors: int | None,
+    exporter_up: bool | None,
+) -> str:
+    if (
+        critical_alerts is None
+        or collection_errors is None
+        or exporter_up is None
+    ):
+        return "UNAVAILABLE"
+    if (
+        critical_alerts == 0
+        and collection_errors == 0
+        and exporter_up
+    ):
+        return "PASS"
+    return "FAIL"
+
+
 def collect_platform() -> dict[str, object]:
     now = time.monotonic()
     with _platform_cache_lock:
@@ -308,6 +328,19 @@ def collect_platform() -> dict[str, object]:
     targets_up = _integer(scalar["targets_up"])
     targets_total = _integer(scalar["targets_total"])
     prometheus_reachable = results["targets_up"] is not None
+    critical_alerts = _integer(scalar["critical_alerts"])
+    warning_alerts = _integer(scalar["warning_alerts"])
+    collection_errors = _integer(scalar["ros_collection_errors"])
+    exporter_up = (
+        None
+        if scalar["ros_exporter_up"] is None
+        else scalar["ros_exporter_up"] >= 1
+    )
+    safety_gate = _safety_gate(
+        critical_alerts,
+        collection_errors,
+        exporter_up,
+    )
 
     payload: dict[str, object] = {
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -316,11 +349,7 @@ def collect_platform() -> dict[str, object]:
         "robot": {
             "source": "Prometheus / Robotek ROS exporter",
             "available": results["ros_exporter_up"] is not None,
-            "exporter_up": (
-                None
-                if scalar["ros_exporter_up"] is None
-                else scalar["ros_exporter_up"] >= 1
-            ),
+            "exporter_up": exporter_up,
             "nodes": _integer(scalar["ros_nodes"]),
             "topics": _integer(scalar["ros_topics"]),
             "collection_errors": _integer(
@@ -371,9 +400,17 @@ def collect_platform() -> dict[str, object]:
         "database": database_status(),
         "alerts": {
             "source": "Prometheus ALERTS",
-            "critical_firing": _integer(scalar["critical_alerts"]),
-            "warning_firing": _integer(scalar["warning_alerts"]),
+            "critical_firing": critical_alerts,
+            "warning_firing": warning_alerts,
             "items": _alert_details(results["alert_details"]),
+        },
+        "safety": {
+            "source": "Prometheus ALERTS / Robotek ROS exporter",
+            "gate": safety_gate,
+            "critical_alerts": critical_alerts,
+            "warning_alerts": warning_alerts,
+            "ros_collection_errors": collection_errors,
+            "exporter_up": exporter_up,
         },
     }
 
