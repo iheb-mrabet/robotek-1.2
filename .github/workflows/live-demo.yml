@@ -2,6 +2,14 @@ name: Robotek Live Demo
 run-name: Robotek Live Demo · ${{ github.event.head_commit.message }}
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - demo/**
+      - deploy/helm/robotek-demo/**
+      - .github/workflows/live-demo.yml
+
   push:
     branches:
       - main
@@ -130,6 +138,7 @@ jobs:
 
   build-and-push:
     name: Build and push ${{ matrix.component }} image
+    if: github.event_name != 'pull_request'
     needs:
       - unit-tests
       - integration-tests
