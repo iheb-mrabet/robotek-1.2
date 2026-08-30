@@ -10,8 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 
-RUN addgroup -S robotek && adduser -S -G robotek robotek
-USER robotek
+RUN addgroup -S -g 10001 robotek \
+    && adduser -S -D -H -u 10001 -G robotek robotek
+USER 10001:10001
 
 EXPOSE 8000
 
