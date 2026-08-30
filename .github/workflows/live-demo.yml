@@ -179,7 +179,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=robotek-demo-${{ matrix.component }}
 
       - name: Scan published image with Trivy
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.DOCKERHUB_NAMESPACE }}/robotek-demo-${{ matrix.component }}:${{ github.sha }}
           format: table
