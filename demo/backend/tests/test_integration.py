@@ -20,6 +20,9 @@ def test_frontend_is_served():
     assert status == 200
     assert "Robotek Delivery Robot" in body
     assert "Operations Control" in body
+    assert "Robot runtime" in body
+    assert "Prometheus uptime" in body
+    assert "Grafana service" in body
 
 
 def test_frontend_reaches_backend_health_and_readiness():
@@ -53,3 +56,11 @@ def test_complete_frontend_backend_database_flow():
     assert payload["observability"]["prometheus_reachable"] is False
     assert payload["robot"]["nodes"] is None
     assert payload["robot"]["topics"] is None
+    assert payload["robot"]["runtime_uptime_seconds"] is None
+    assert payload["cluster"]["uptime_seconds"] is None
+    assert payload["observability"]["prometheus_uptime_seconds"] is None
+    assert payload["observability"]["grafana"] == {
+        "reachable": False,
+        "database": None,
+        "version": None,
+    }

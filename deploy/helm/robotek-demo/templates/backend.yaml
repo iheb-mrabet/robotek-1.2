@@ -51,6 +51,8 @@ spec:
               value: {{ .Values.images.backend.tag | quote }}
             - name: PROMETHEUS_URL
               value: {{ .Values.observability.prometheusInternalUrl | quote }}
+            - name: GRAFANA_URL
+              value: {{ .Values.observability.grafanaInternalUrl | quote }}
             - name: GRAFANA_PUBLIC_URL
               value: {{ .Values.observability.grafanaPublicUrl | quote }}
             - name: PROMETHEUS_PUBLIC_URL

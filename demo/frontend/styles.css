@@ -199,30 +199,22 @@ nav {
   margin: 0 4px;
 }
 
-.tool-links a {
+.tool-links div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   color: var(--muted-strong);
   font-size: 0.76rem;
   font-weight: 650;
-  text-decoration: none;
-  transition:
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
 }
 
-.tool-links a::after {
-  float: right;
+.tool-links strong {
   color: var(--green);
-  content: "↗";
-}
-
-.tool-links a:hover {
-  border-color: var(--line-strong);
-  color: var(--text);
-  transform: translateY(-1px);
+  font-size: 0.57rem;
+  letter-spacing: 0.08em;
 }
 
 .author {
@@ -423,6 +415,79 @@ body[data-state="offline"] .live-dot {
   margin-bottom: 18px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.runtime-grid {
+  display: grid;
+  margin-bottom: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.runtime-card {
+  min-height: 142px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, rgba(16, 25, 38, 0.96), rgba(8, 14, 23, 0.98)),
+    var(--surface);
+}
+
+.runtime-card > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.runtime-card p {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.runtime-card > strong {
+  display: block;
+  margin-top: 21px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(1.05rem, 2.1vw, 1.45rem);
+  letter-spacing: -0.035em;
+}
+
+.runtime-card small {
+  display: block;
+  margin-top: 7px;
+  color: #68778b;
+  font-size: 0.65rem;
+}
+
+.runtime-icon {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid rgba(113, 150, 255, 0.3);
+  border-radius: 7px;
+  color: var(--blue);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 900;
+}
+
+.runtime-icon.robot-icon {
+  border-color: rgba(71, 230, 177, 0.3);
+  color: var(--green);
+}
+
+.runtime-icon.prometheus-icon {
+  border-color: rgba(255, 123, 120, 0.3);
+  color: var(--red);
+}
+
+.runtime-icon.grafana-icon {
+  border-color: rgba(255, 191, 105, 0.3);
+  color: var(--amber);
 }
 
 .metric-card,
@@ -750,6 +815,35 @@ td code {
   line-height: 1.45;
 }
 
+.provenance-grid em {
+  display: inline-flex;
+  margin-top: 13px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.52rem;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.provenance-grid em.live {
+  border-color: rgba(71, 230, 177, 0.28);
+  background: rgba(71, 230, 177, 0.07);
+  color: var(--green);
+}
+
+.provenance-grid em.check {
+  border-color: rgba(255, 191, 105, 0.28);
+  color: var(--amber);
+}
+
+.provenance-grid em.unavailable {
+  border-color: rgba(255, 123, 120, 0.28);
+  color: var(--red);
+}
+
 .data-note {
   margin: 16px 0 0;
   padding-left: 12px;
@@ -769,7 +863,8 @@ footer {
 }
 
 @media (max-width: 1180px) {
-  .metric-grid {
+  .metric-grid,
+  .runtime-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -881,6 +976,7 @@ footer {
   }
 
   .metric-grid,
+  .runtime-grid,
   .chart-grid,
   .provenance-grid {
     grid-template-columns: 1fr;
