@@ -16,24 +16,17 @@ const displayRatio = (ready, total) =>
     ? `${ready} / ${total}`
     : "Unavailable";
 
-const formatUptime = (seconds) => {
+function displayDuration(seconds) {
   if (!isNumber(seconds) || seconds < 0) return "Unavailable";
 
   const total = Math.floor(seconds);
   const days = Math.floor(total / 86400);
   const hours = Math.floor((total % 86400) / 3600);
   const minutes = Math.floor((total % 3600) / 60);
-  const remainingSeconds = total % 60;
 
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m ${remainingSeconds}s`;
-  return `${minutes}m ${remainingSeconds}s`;
-};
-
-function setSourceState(id, healthy, available = true) {
-  const element = byId(id);
-  element.textContent = !available ? "UNAVAILABLE" : healthy ? "LIVE" : "CHECK";
-  element.className = !available ? "unavailable" : healthy ? "live" : "check";
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${total % 60}s`;
 }
 
 function setBadge(element, label, state) {
@@ -221,6 +214,12 @@ function renderPlatform(payload) {
 
   byId("ros-nodes").textContent = displayNumber(robot.nodes);
   byId("ros-topics").textContent = displayNumber(robot.topics);
+  byId("robot-runtime-uptime").textContent = displayDuration(
+    robot.runtime_uptime_seconds,
+  );
+  byId("robot-restarts").textContent = displayNumber(
+    robot.container_restarts,
+  );
   byId("targets").textContent = displayRatio(
     observability.targets_up,
     observability.targets_total,
@@ -251,64 +250,6 @@ function renderPlatform(payload) {
     ? "CONNECTED"
     : "UNAVAILABLE";
 
-  byId("robot-uptime").textContent = formatUptime(
-    robot.runtime_uptime_seconds,
-  );
-  byId("cluster-uptime").textContent = formatUptime(
-    cluster.uptime_seconds,
-  );
-  byId("prometheus-uptime").textContent = formatUptime(
-    observability.prometheus_uptime_seconds,
-  );
-
-  const grafana = observability.grafana || {};
-  byId("grafana-health").textContent = grafana.reachable
-    ? "HEALTHY"
-    : "Unavailable";
-  byId("grafana-version").textContent = grafana.version
-    ? `Grafana ${grafana.version} · database ${grafana.database}`
-    : "Live API health check unavailable";
-
-  byId("prometheus-sidebar-state").textContent =
-    observability.prometheus_reachable ? "LIVE" : "UNAVAILABLE";
-  byId("grafana-sidebar-state").textContent = grafana.reachable
-    ? "LIVE"
-    : "UNAVAILABLE";
-
-  const clusterAvailable =
-    isNumber(cluster.nodes_ready) && isNumber(cluster.nodes_total);
-  const clusterHealthy =
-    clusterAvailable && cluster.nodes_ready === cluster.nodes_total;
-  const gitopsAvailable =
-    isNumber(observability.gitops_healthy) &&
-    isNumber(observability.gitops_total);
-  const gitopsHealthy =
-    gitopsAvailable &&
-    observability.gitops_healthy === observability.gitops_total;
-
-  setSourceState(
-    "ros-source-state",
-    robot.exporter_up === true,
-    robot.exporter_up !== null,
-  );
-  setSourceState(
-    "cluster-source-state",
-    clusterHealthy,
-    clusterAvailable,
-  );
-  setSourceState(
-    "gitops-source-state",
-    gitopsHealthy,
-    gitopsAvailable,
-  );
-  setSourceState("database-source-state", database.connected, true);
-  setSourceState(
-    "prometheus-source-state",
-    observability.prometheus_reachable,
-    true,
-  );
-  setSourceState("grafana-source-state", grafana.reachable, true);
-
   byId("cpu-value").textContent = displayNumber(
     cluster.cpu_percent,
     "%",
@@ -317,6 +258,31 @@ function renderPlatform(payload) {
     cluster.memory_percent,
     "%",
   );
+  byId("cluster-uptime").textContent = displayDuration(
+    cluster.uptime_seconds,
+  );
+  byId("prometheus-uptime").textContent = displayDuration(
+    observability.prometheus_uptime_seconds,
+  );
+
+  const grafana = observability.grafana || {};
+  byId("grafana-health").textContent = grafana.reachable
+    ? "HEALTHY"
+    : "UNAVAILABLE";
+  byId("grafana-version").textContent = grafana.version
+    ? `Grafana ${grafana.version} · database ${grafana.database}`
+    : "Live Grafana API health unavailable";
+  setBadge(
+    byId("grafana-badge"),
+    grafana.reachable ? "LIVE" : "UNAVAILABLE",
+    grafana.reachable ? "good" : "bad",
+  );
+
+  byId("prometheus-sidebar-state").textContent =
+    observability.prometheus_reachable ? "LIVE" : "UNAVAILABLE";
+  byId("grafana-sidebar-state").textContent = grafana.reachable
+    ? "LIVE"
+    : "UNAVAILABLE";
 
   addHistory(history.cpu, cluster.cpu_percent);
   addHistory(history.memory, cluster.memory_percent);

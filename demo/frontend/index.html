@@ -23,7 +23,6 @@
 
         <nav aria-label="Dashboard sections">
           <a class="nav-link active" href="#overview">Overview</a>
-          <a class="nav-link" href="#runtime">Runtime</a>
           <a class="nav-link" href="#cluster">Cluster</a>
           <a class="nav-link" href="#ros-graph">ROS graph</a>
           <a class="nav-link" href="#data-sources">Data sources</a>
@@ -39,7 +38,7 @@
           </div>
         </div>
 
-        <div class="tool-links" aria-label="Observability service state">
+        <div class="tool-links" aria-label="Live observability service state">
           <div>
             <span>Prometheus</span>
             <strong id="prometheus-sidebar-state">CHECKING</strong>
@@ -115,49 +114,56 @@
 
           <article class="metric-card">
             <div class="metric-heading">
+              <span>Robot runtime uptime</span>
+              <span class="source-tag">KUBE-STATE</span>
+            </div>
+            <strong id="robot-runtime-uptime" class="metric-value text-value">—</strong>
+            <p>Current ROS workload pod age</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Robot restarts</span>
+              <span class="source-tag">KUBE-STATE</span>
+            </div>
+            <strong id="robot-restarts" class="metric-value">—</strong>
+            <p>Current robot container restart count</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>K3s node uptime</span>
+              <span class="source-tag">NODE EXPORTER</span>
+            </div>
+            <strong id="cluster-uptime" class="metric-value text-value">—</strong>
+            <p>Measured from node boot time</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Prometheus uptime</span>
+              <span class="source-tag">PROCESS METRIC</span>
+            </div>
+            <strong id="prometheus-uptime" class="metric-value text-value">—</strong>
+            <p>Measured from Prometheus process start time</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Grafana service</span>
+              <span id="grafana-badge" class="badge neutral">WAITING</span>
+            </div>
+            <strong id="grafana-health" class="metric-value text-value">—</strong>
+            <p id="grafana-version">Live Grafana API health and version</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
               <span>Prometheus targets</span>
               <span id="targets-badge" class="badge neutral">WAITING</span>
             </div>
             <strong id="targets" class="metric-value">—</strong>
             <p>Healthy scrape targets</p>
-          </article>
-        </section>
-
-        <section id="runtime" class="runtime-grid" aria-label="Live service uptime">
-          <article class="runtime-card">
-            <div>
-              <span class="runtime-icon robot-icon">R</span>
-              <p>Robot runtime</p>
-            </div>
-            <strong id="robot-uptime">Unavailable</strong>
-            <small>Kubernetes pod start time</small>
-          </article>
-
-          <article class="runtime-card">
-            <div>
-              <span class="runtime-icon">K</span>
-              <p>K3s node uptime</p>
-            </div>
-            <strong id="cluster-uptime">Unavailable</strong>
-            <small>Node exporter boot time</small>
-          </article>
-
-          <article class="runtime-card">
-            <div>
-              <span class="runtime-icon prometheus-icon">P</span>
-              <p>Prometheus uptime</p>
-            </div>
-            <strong id="prometheus-uptime">Unavailable</strong>
-            <small>Prometheus process start time</small>
-          </article>
-
-          <article class="runtime-card">
-            <div>
-              <span class="runtime-icon grafana-icon">G</span>
-              <p>Grafana service</p>
-            </div>
-            <strong id="grafana-health">Unavailable</strong>
-            <small id="grafana-version">Live API health check</small>
           </article>
         </section>
 
@@ -277,32 +283,18 @@
             <div>
               <strong>ROS telemetry</strong>
               <span>Robotek exporter → Prometheus</span>
-              <em id="ros-source-state">CHECKING</em>
             </div>
             <div>
               <strong>Cluster state</strong>
               <span>kube-state-metrics + node-exporter</span>
-              <em id="cluster-source-state">CHECKING</em>
             </div>
             <div>
               <strong>GitOps state</strong>
               <span>Argo CD metrics → Prometheus</span>
-              <em id="gitops-source-state">CHECKING</em>
             </div>
             <div>
               <strong>Data layer</strong>
               <span>Live PostgreSQL connectivity check</span>
-              <em id="database-source-state">CHECKING</em>
-            </div>
-            <div>
-              <strong>Metrics engine</strong>
-              <span>Prometheus HTTP API</span>
-              <em id="prometheus-source-state">CHECKING</em>
-            </div>
-            <div>
-              <strong>Visualization</strong>
-              <span>Grafana health API</span>
-              <em id="grafana-source-state">CHECKING</em>
             </div>
           </div>
           <p class="data-note">

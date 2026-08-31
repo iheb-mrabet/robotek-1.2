@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: robotek-live-demo
+  group: robotek-live-demo-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -275,6 +275,8 @@ jobs:
           kubectl -n robotek-demo get pods,services
 
       - name: Verify live webpage and API
+        env:
+          EXPECTED_IMAGE_TAG: ${{ github.sha }}
         run: |
           curl --fail --show-error --silent \
             --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
@@ -291,10 +293,63 @@ jobs:
             http://127.0.0.1:30080/ready \
             | grep -F '"status":"ready"'
 
-          curl --fail --show-error --silent \
-            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 90 \
-            http://127.0.0.1:30080/api/platform \
-            | grep -F '"data_policy":"live-only"'
+          telemetry_valid=false
+          for attempt in $(seq 1 18); do
+            echo "Live telemetry validation attempt ${attempt}"
+            if curl --fail --show-error --silent \
+              http://127.0.0.1:30080/api/platform \
+              > /tmp/robotek-platform.json \
+              && python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(
+              Path("/tmp/robotek-platform.json").read_text(encoding="utf-8")
+          )
+
+          robot = payload["robot"]
+          cluster = payload["cluster"]
+          observability = payload["observability"]
+
+          assert payload["data_policy"] == "live-only"
+          assert payload["release"] == os.environ["EXPECTED_IMAGE_TAG"]
+          assert payload["database"]["connected"] is True
+
+          assert observability["prometheus_reachable"] is True
+          assert observability["targets_total"] > 0
+          assert observability["targets_up"] == observability["targets_total"]
+          assert observability["gitops_total"] > 0
+          assert observability["gitops_synced"] == observability["gitops_total"]
+          assert observability["gitops_healthy"] == observability["gitops_total"]
+          assert observability["prometheus_uptime_seconds"] > 0
+          assert observability["grafana"]["reachable"] is True
+          assert observability["grafana"]["database"] == "ok"
+          assert observability["grafana"]["version"]
+
+          assert robot["exporter_up"] is True
+          assert robot["nodes"] > 0
+          assert robot["topics"] > 0
+          assert robot["collection_errors"] == 0
+          assert robot["runtime_uptime_seconds"] > 0
+          assert robot["container_restarts"] >= 0
+
+          assert cluster["nodes_ready"] == cluster["nodes_total"]
+          assert cluster["pods_ready"] == cluster["pods_total"]
+          assert cluster["deployments_available"] == cluster["deployments_desired"]
+          assert 0 <= cluster["cpu_percent"] <= 100
+          assert 0 <= cluster["memory_percent"] <= 100
+          assert cluster["uptime_seconds"] > 0
+          PY
+            then
+              telemetry_valid=true
+              break
+            fi
+            sleep 5
+          done
+
+          test "${telemetry_valid}" = true
+          python3 -m json.tool /tmp/robotek-platform.json
 
       - name: Deployment summary
         run: |

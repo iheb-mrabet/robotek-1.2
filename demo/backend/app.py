@@ -23,6 +23,13 @@ PROMETHEUS_QUERIES = {
     "ros_collection_errors": (
         'max(robotek_ros_collection_errors_total{namespace="robotek-staging"})'
     ),
+    "robot_runtime_uptime_seconds": (
+        'time() - max(kube_pod_start_time{namespace="robotek-staging"})'
+    ),
+    "robot_container_restarts": (
+        'sum(kube_pod_container_status_restarts_total{'
+        'namespace="robotek-staging",container="robotek"})'
+    ),
     "ros_node_details": (
         'robotek_ros_node_up{namespace="robotek-staging"}'
     ),
@@ -37,11 +44,14 @@ PROMETHEUS_QUERIES = {
     ),
     "cluster_nodes_total": "count(kube_node_info)",
     "cluster_pods_ready": (
-        'sum(kube_pod_status_ready{'
-        'namespace=~"robotek-staging|robotek-demo",condition="true"})'
+        'sum((kube_pod_status_ready{'
+        'namespace=~"robotek-staging|robotek-demo",condition="true"} == 1) '
+        'unless on(namespace,pod) kube_pod_deletion_timestamp)'
     ),
     "cluster_pods_total": (
-        'count(kube_pod_info{namespace=~"robotek-staging|robotek-demo"})'
+        'count((kube_pod_status_phase{'
+        'namespace=~"robotek-staging|robotek-demo",phase=~"Pending|Running"} == 1) '
+        'unless on(namespace,pod) kube_pod_deletion_timestamp)'
     ),
     "deployments_available": (
         'sum(kube_deployment_status_replicas_available{'
@@ -58,10 +68,7 @@ PROMETHEUS_QUERIES = {
         '100 * (1 - sum(node_memory_MemAvailable_bytes) '
         '/ sum(node_memory_MemTotal_bytes))'
     ),
-    "cluster_uptime_seconds": "max(time() - node_boot_time_seconds)",
-    "robot_runtime_uptime_seconds": (
-        'time() - max(kube_pod_start_time{namespace="robotek-staging"})'
-    ),
+    "cluster_uptime_seconds": "time() - max(node_boot_time_seconds)",
     "prometheus_uptime_seconds": (
         'time() - max(process_start_time_seconds{job=~".*prometheus.*"})'
     ),
@@ -114,29 +121,22 @@ def grafana_url() -> str:
 
 def grafana_status() -> dict[str, object]:
     endpoint = grafana_url()
+    unavailable = {
+        "reachable": False,
+        "database": None,
+        "version": None,
+    }
     if not endpoint:
-        return {
-            "reachable": False,
-            "database": None,
-            "version": None,
-        }
+        return unavailable
 
     try:
         with urlopen(f"{endpoint}/api/health", timeout=3) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
-        return {
-            "reachable": False,
-            "database": None,
-            "version": None,
-        }
+        return unavailable
 
     if not isinstance(payload, dict):
-        return {
-            "reachable": False,
-            "database": None,
-            "version": None,
-        }
+        return unavailable
 
     database = payload.get("database")
     version = payload.get("version")
@@ -374,6 +374,9 @@ def collect_platform() -> dict[str, object]:
             ),
             "runtime_uptime_seconds": _integer(
                 scalar["robot_runtime_uptime_seconds"]
+            ),
+            "container_restarts": _integer(
+                scalar["robot_container_restarts"]
             ),
             "node_names": _node_names(results["ros_node_details"]),
             "topic_details": _topic_details(
