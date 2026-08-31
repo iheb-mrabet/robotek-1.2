@@ -322,6 +322,10 @@ jobs:
           assert observability["gitops_total"] > 0
           assert observability["gitops_synced"] == observability["gitops_total"]
           assert observability["gitops_healthy"] == observability["gitops_total"]
+          assert observability["prometheus_uptime_seconds"] > 0
+          assert observability["grafana"]["reachable"] is True
+          assert observability["grafana"]["database"] == "ok"
+          assert observability["grafana"]["version"]
 
           assert robot["exporter_up"] is True
           assert robot["nodes"] > 0
@@ -362,4 +366,118 @@ jobs:
             echo "- Live interface: reachable"
             echo "- ROS and cluster telemetry: Prometheus-backed"
             echo "- Data policy: live-only; unavailable sources are never simulated"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  public-interface:
+    name: Publish temporary HTTPS interface
+    needs: automated-deployment
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - robotek-staging
+      - k3s
+      - staging
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Start or reuse Cloudflare Quick Tunnel
+        id: tunnel
+        env:
+          CLOUDFLARED_VERSION: 2026.8.2
+          CLOUDFLARED_SHA256: fcfb02b575a52ca1af2e3267af4e1517bcdeb30ac48c834c69abaed3c0576ad2
+        run: |
+          set -Eeuo pipefail
+
+          tunnel_dir="/tmp/robotek-live-demo-tunnel"
+          binary="${tunnel_dir}/cloudflared"
+          pid_file="${tunnel_dir}/cloudflared.pid"
+          url_file="${tunnel_dir}/public-url"
+          log_file="${tunnel_dir}/cloudflared.log"
+          mkdir -p "${tunnel_dir}"
+
+          if [[ ! -x "${binary}" ]] || ! echo "${CLOUDFLARED_SHA256}  ${binary}" | sha256sum --check --status; then
+            curl --fail --location --silent --show-error \
+              --retry 5 --retry-all-errors \
+              "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64" \
+              --output "${binary}.download"
+            echo "${CLOUDFLARED_SHA256}  ${binary}.download" | sha256sum --check
+            chmod 0755 "${binary}.download"
+            mv "${binary}.download" "${binary}"
+          fi
+
+          tunnel_process_is_valid() {
+            local pid="$1"
+            [[ "${pid}" =~ ^[0-9]+$ ]] || return 1
+            kill -0 "${pid}" 2>/dev/null || return 1
+            tr '\0' ' ' < "/proc/${pid}/cmdline" | grep --fixed-strings --quiet "${binary} tunnel"
+          }
+
+          public_url=""
+          existing_pid=""
+          if [[ -s "${pid_file}" ]]; then
+            existing_pid="$(<"${pid_file}")"
+          fi
+
+          if tunnel_process_is_valid "${existing_pid}" && [[ -s "${url_file}" ]]; then
+            candidate_url="$(<"${url_file}")"
+            if curl --fail --silent --show-error --max-time 15 \
+              "${candidate_url}/health" | grep --fixed-strings --quiet '"status":"ok"'; then
+              public_url="${candidate_url}"
+              echo "Reusing healthy tunnel ${public_url}"
+            fi
+          fi
+
+          if [[ -z "${public_url}" ]]; then
+            if tunnel_process_is_valid "${existing_pid}"; then
+              kill "${existing_pid}"
+              for _ in $(seq 1 20); do
+                kill -0 "${existing_pid}" 2>/dev/null || break
+                sleep 0.25
+              done
+            fi
+
+            : > "${log_file}"
+            nohup env RUNNER_TRACKING_ID=robotek-public-tunnel \
+              "${binary}" tunnel \
+              --no-autoupdate \
+              --protocol http2 \
+              --url http://127.0.0.1:30080 \
+              > "${log_file}" 2>&1 < /dev/null &
+            tunnel_pid=$!
+            echo "${tunnel_pid}" > "${pid_file}"
+
+            for _ in $(seq 1 60); do
+              public_url="$(grep --extended-regexp --only-matching \
+                'https://[-a-z0-9]+\.trycloudflare\.com' \
+                "${log_file}" | tail -n 1 || true)"
+              if [[ -n "${public_url}" ]] && curl --fail --silent --show-error \
+                --max-time 15 "${public_url}/health" \
+                | grep --fixed-strings --quiet '"status":"ok"'; then
+                echo "${public_url}" > "${url_file}"
+                break
+              fi
+              public_url=""
+              sleep 2
+            done
+          fi
+
+          if [[ -z "${public_url}" ]]; then
+            echo "Cloudflare tunnel did not become healthy." >&2
+            tail -n 80 "${log_file}" >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --max-time 15 "${public_url}/" \
+            | grep --fixed-strings --quiet "Robotek Delivery Robot"
+
+          echo "public_url=${public_url}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## Public Robotek interface"
+            echo
+            echo "- HTTPS dashboard: ${public_url}"
+            echo "- Health endpoint: ${public_url}/health"
+            echo "- Source: AWS K3s NodePort through Cloudflare Quick Tunnel"
+            echo "- Status: externally reachable and verified"
           } >> "${GITHUB_STEP_SUMMARY}"

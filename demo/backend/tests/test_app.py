@@ -1,9 +1,11 @@
-from unittest.mock import patch
+import json
+from unittest.mock import MagicMock, patch
 
 from app import (
     _sample_value,
     _topic_details,
     create_app,
+    grafana_status,
 )
 
 
@@ -49,6 +51,12 @@ PLATFORM_PAYLOAD = {
         "gitops_synced": 2,
         "gitops_healthy": 2,
         "gitops_total": 2,
+        "prometheus_uptime_seconds": 7200,
+        "grafana": {
+            "reachable": True,
+            "database": "ok",
+            "version": "12.2.0",
+        },
         "grafana_url": "http://localhost:3000",
         "prometheus_url": "http://localhost:9090",
     },
@@ -101,6 +109,8 @@ def test_platform_endpoint_returns_live_data_contract():
     assert response.get_json()["robot"]["runtime_uptime_seconds"] == 7200
     assert response.get_json()["cluster"]["pods_ready"] == 4
     assert response.get_json()["cluster"]["uptime_seconds"] == 86400
+    assert response.get_json()["observability"]["prometheus_uptime_seconds"] == 7200
+    assert response.get_json()["observability"]["grafana"]["reachable"] is True
 
 
 def test_prometheus_sample_value_parsing():
@@ -140,3 +150,33 @@ def test_topic_vectors_are_merged_without_inventing_values():
             "subscribers": 1,
         },
     ]
+
+
+def test_grafana_health_uses_the_live_api_response():
+    response = MagicMock()
+    response.read.return_value = json.dumps(
+        {"database": "ok", "version": "12.2.0"}
+    ).encode("utf-8")
+    response.__enter__.return_value = response
+
+    with (
+        patch.dict("os.environ", {"GRAFANA_URL": "http://grafana"}),
+        patch("app.urlopen", return_value=response) as request,
+    ):
+        status = grafana_status()
+
+    request.assert_called_once_with("http://grafana/api/health", timeout=3)
+    assert status == {
+        "reachable": True,
+        "database": "ok",
+        "version": "12.2.0",
+    }
+
+
+def test_grafana_health_never_invents_fallback_state():
+    with patch.dict("os.environ", {"GRAFANA_URL": ""}):
+        assert grafana_status() == {
+            "reachable": False,
+            "database": None,
+            "version": None,
+        }

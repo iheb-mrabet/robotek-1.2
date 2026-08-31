@@ -69,6 +69,9 @@ PROMETHEUS_QUERIES = {
         '/ sum(node_memory_MemTotal_bytes))'
     ),
     "cluster_uptime_seconds": "time() - max(node_boot_time_seconds)",
+    "prometheus_uptime_seconds": (
+        'time() - max(process_start_time_seconds{job=~".*prometheus.*"})'
+    ),
     "gitops_synced": (
         'sum(argocd_app_info{'
         'name=~"robotek-staging|robotek-demo",sync_status="Synced"})'
@@ -83,11 +86,11 @@ PROMETHEUS_QUERIES = {
     ),
     "critical_alerts": (
         'count(ALERTS{service="robotek",severity="critical",'
-        'alertstate="firing"})'
+        'alertstate="firing"}) or vector(0)'
     ),
     "warning_alerts": (
         'count(ALERTS{service="robotek",severity="warning",'
-        'alertstate="firing"})'
+        'alertstate="firing"}) or vector(0)'
     ),
     "alert_details": 'ALERTS{service="robotek",alertstate="firing"}',
 }
@@ -110,6 +113,38 @@ def deployment_release() -> str:
 
 def prometheus_url() -> str:
     return os.getenv("PROMETHEUS_URL", "").rstrip("/")
+
+
+def grafana_url() -> str:
+    return os.getenv("GRAFANA_URL", "").rstrip("/")
+
+
+def grafana_status() -> dict[str, object]:
+    endpoint = grafana_url()
+    unavailable = {
+        "reachable": False,
+        "database": None,
+        "version": None,
+    }
+    if not endpoint:
+        return unavailable
+
+    try:
+        with urlopen(f"{endpoint}/api/health", timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return unavailable
+
+    if not isinstance(payload, dict):
+        return unavailable
+
+    database = payload.get("database")
+    version = payload.get("version")
+    return {
+        "reachable": database == "ok",
+        "database": database if isinstance(database, str) else None,
+        "version": version if isinstance(version, str) else None,
+    }
 
 
 def database_is_ready() -> bool:
@@ -379,6 +414,10 @@ def collect_platform() -> dict[str, object]:
             "gitops_synced": _integer(scalar["gitops_synced"]),
             "gitops_healthy": _integer(scalar["gitops_healthy"]),
             "gitops_total": _integer(scalar["gitops_total"]),
+            "prometheus_uptime_seconds": _integer(
+                scalar["prometheus_uptime_seconds"]
+            ),
+            "grafana": grafana_status(),
             "grafana_url": os.getenv(
                 "GRAFANA_PUBLIC_URL",
                 "http://localhost:3000",

@@ -38,13 +38,15 @@
           </div>
         </div>
 
-        <div class="tool-links">
-          <a id="grafana-link" href="http://localhost:3000" target="_blank" rel="noreferrer">
-            Open Grafana
-          </a>
-          <a id="prometheus-link" href="http://localhost:9090" target="_blank" rel="noreferrer">
-            Open Prometheus
-          </a>
+        <div class="tool-links" aria-label="Live observability service state">
+          <div>
+            <span>Prometheus</span>
+            <strong id="prometheus-sidebar-state">CHECKING</strong>
+          </div>
+          <div>
+            <span>Grafana</span>
+            <strong id="grafana-sidebar-state">CHECKING</strong>
+          </div>
         </div>
 
         <p class="author">Platform by Iheb Mrabet</p>
@@ -135,6 +137,24 @@
             </div>
             <strong id="cluster-uptime" class="metric-value text-value">—</strong>
             <p>Measured from node boot time</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Prometheus uptime</span>
+              <span class="source-tag">PROCESS METRIC</span>
+            </div>
+            <strong id="prometheus-uptime" class="metric-value text-value">—</strong>
+            <p>Measured from Prometheus process start time</p>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-heading">
+              <span>Grafana service</span>
+              <span id="grafana-badge" class="badge neutral">WAITING</span>
+            </div>
+            <strong id="grafana-health" class="metric-value text-value">—</strong>
+            <p id="grafana-version">Live Grafana API health and version</p>
           </article>
 
           <article class="metric-card">

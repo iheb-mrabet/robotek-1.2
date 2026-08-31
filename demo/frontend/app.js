@@ -40,6 +40,7 @@ function systemIsReady(payload) {
     robot.exporter_up === true &&
     database.connected === true &&
     observability.prometheus_reachable === true &&
+    observability.grafana?.reachable === true &&
     isNumber(cluster.pods_ready) &&
     cluster.pods_ready === cluster.pods_total &&
     isNumber(cluster.deployments_available) &&
@@ -260,6 +261,28 @@ function renderPlatform(payload) {
   byId("cluster-uptime").textContent = displayDuration(
     cluster.uptime_seconds,
   );
+  byId("prometheus-uptime").textContent = displayDuration(
+    observability.prometheus_uptime_seconds,
+  );
+
+  const grafana = observability.grafana || {};
+  byId("grafana-health").textContent = grafana.reachable
+    ? "HEALTHY"
+    : "UNAVAILABLE";
+  byId("grafana-version").textContent = grafana.version
+    ? `Grafana ${grafana.version} · database ${grafana.database}`
+    : "Live Grafana API health unavailable";
+  setBadge(
+    byId("grafana-badge"),
+    grafana.reachable ? "LIVE" : "UNAVAILABLE",
+    grafana.reachable ? "good" : "bad",
+  );
+
+  byId("prometheus-sidebar-state").textContent =
+    observability.prometheus_reachable ? "LIVE" : "UNAVAILABLE";
+  byId("grafana-sidebar-state").textContent = grafana.reachable
+    ? "LIVE"
+    : "UNAVAILABLE";
 
   addHistory(history.cpu, cluster.cpu_percent);
   addHistory(history.memory, cluster.memory_percent);
@@ -268,13 +291,6 @@ function renderPlatform(payload) {
 
   renderNodes(robot.node_names || []);
   renderTopics(robot.topic_details || []);
-
-  if (observability.grafana_url) {
-    byId("grafana-link").href = observability.grafana_url;
-  }
-  if (observability.prometheus_url) {
-    byId("prometheus-link").href = observability.prometheus_url;
-  }
 
   byId("refresh-state").textContent =
     "Last refresh completed · next update in 5 seconds";

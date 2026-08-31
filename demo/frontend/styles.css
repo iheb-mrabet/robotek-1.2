@@ -199,30 +199,22 @@ nav {
   margin: 0 4px;
 }
 
-.tool-links a {
+.tool-links div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   color: var(--muted-strong);
   font-size: 0.76rem;
   font-weight: 650;
-  text-decoration: none;
-  transition:
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
 }
 
-.tool-links a::after {
-  float: right;
+.tool-links strong {
   color: var(--green);
-  content: "↗";
-}
-
-.tool-links a:hover {
-  border-color: var(--line-strong);
-  color: var(--text);
-  transform: translateY(-1px);
+  font-size: 0.57rem;
+  letter-spacing: 0.08em;
 }
 
 .author {
@@ -421,7 +413,7 @@ body[data-state="offline"] .live-dot {
 .metric-grid {
   display: grid;
   margin-bottom: 18px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 

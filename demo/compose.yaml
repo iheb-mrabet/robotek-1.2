@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: robotek
       POSTGRES_USER: robotek
-      POSTGRES_PASSWORD: robotek-demo-password
+      POSTGRES_HOST_AUTH_METHOD: trust
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U robotek -d robotek"]
       interval: 3s
@@ -18,11 +18,12 @@ services:
       context: ./backend
     image: ihebmrabet/robotek-demo-backend:local
     environment:
-      DATABASE_URL: postgresql://robotek:robotek-demo-password@database:5432/robotek
+      DATABASE_URL: postgresql://robotek@database:5432/robotek
       DEPLOYMENT_RELEASE: local
       PROMETHEUS_URL: ""
-      GRAFANA_PUBLIC_URL: http://localhost:3000
-      PROMETHEUS_PUBLIC_URL: http://localhost:9090
+      GRAFANA_URL: ""
+      GRAFANA_PUBLIC_URL: ""
+      PROMETHEUS_PUBLIC_URL: ""
     depends_on:
       database:
         condition: service_healthy
