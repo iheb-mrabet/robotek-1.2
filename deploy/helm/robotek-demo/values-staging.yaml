@@ -15,6 +15,6 @@ frontend:
   nodePort: 30080
 
 observability:
-  grafanaInternalUrl: http://robotek-monitoring-grafana.monitoring.svc.cluster.local
+  grafanaInternalUrl: http://robotek-grafana.monitoring.svc.cluster.local
   grafanaPublicUrl: ""
   prometheusPublicUrl: ""
