@@ -8,6 +8,7 @@ on:
     paths:
       - demo/**
       - deploy/helm/robotek-demo/**
+      - deploy/helm/observability/**
       - .github/workflows/live-demo.yml
 
   push:
@@ -16,6 +17,7 @@ on:
     paths:
       - demo/**
       - deploy/helm/robotek-demo/**
+      - deploy/helm/observability/**
       - .github/workflows/live-demo.yml
 
   workflow_dispatch:
@@ -129,6 +131,12 @@ jobs:
       - name: Lint Kubernetes Helm chart
         run: helm lint deploy/helm/robotek-demo --values deploy/helm/robotek-demo/values-staging.yaml
 
+      - name: Build and lint observability Helm chart
+        run: |
+          helm dependency build deploy/helm/observability
+          helm lint deploy/helm/observability \
+            --values deploy/helm/observability/values-staging.yaml
+
       - name: Render Kubernetes deployment
         run: |
           helm template robotek-demo deploy/helm/robotek-demo \
@@ -136,6 +144,14 @@ jobs:
             --values deploy/helm/robotek-demo/values-staging.yaml \
             > /tmp/robotek-demo.yaml
           grep -E '^kind: (Deployment|Service|Secret|Role|RoleBinding)$' /tmp/robotek-demo.yaml
+
+          helm template robotek-observability deploy/helm/observability \
+            --namespace monitoring \
+            --values deploy/helm/observability/values-staging.yaml \
+            > /tmp/robotek-observability.yaml
+          grep -F 'name: robotek-grafana' /tmp/robotek-observability.yaml
+          grep -F 'value: "http://robotek-grafana.monitoring.svc.cluster.local"' \
+            /tmp/robotek-demo.yaml
 
   build-and-push:
     name: Build and push ${{ matrix.component }} image
@@ -312,34 +328,56 @@ jobs:
           cluster = payload["cluster"]
           observability = payload["observability"]
 
-          assert payload["data_policy"] == "live-only"
-          assert payload["release"] == os.environ["EXPECTED_IMAGE_TAG"]
-          assert payload["database"]["connected"] is True
+          def require(condition, message):
+              if not condition:
+                  raise AssertionError(message)
 
-          assert observability["prometheus_reachable"] is True
-          assert observability["targets_total"] > 0
-          assert observability["targets_up"] == observability["targets_total"]
-          assert observability["gitops_total"] > 0
-          assert observability["gitops_synced"] == observability["gitops_total"]
-          assert observability["gitops_healthy"] == observability["gitops_total"]
-          assert observability["prometheus_uptime_seconds"] > 0
-          assert observability["grafana"]["reachable"] is True
-          assert observability["grafana"]["database"] == "ok"
-          assert observability["grafana"]["version"]
+          require(payload["data_policy"] == "live-only", "data policy is not live-only")
+          require(
+              payload["release"] == os.environ["EXPECTED_IMAGE_TAG"],
+              "deployed release does not match the workflow commit",
+          )
+          require(payload["database"]["connected"] is True, "PostgreSQL is unavailable")
 
-          assert robot["exporter_up"] is True
-          assert robot["nodes"] > 0
-          assert robot["topics"] > 0
-          assert robot["collection_errors"] == 0
-          assert robot["runtime_uptime_seconds"] > 0
-          assert robot["container_restarts"] >= 0
+          require(observability["prometheus_reachable"] is True, "Prometheus is unavailable")
+          require(observability["targets_total"] > 0, "Prometheus has no targets")
+          require(
+              observability["targets_up"] == observability["targets_total"],
+              "one or more Prometheus targets are down",
+          )
+          require(observability["gitops_total"] > 0, "Argo CD metrics are unavailable")
+          require(
+              observability["gitops_synced"] == observability["gitops_total"],
+              "one or more Argo CD applications are out of sync",
+          )
+          require(
+              observability["gitops_healthy"] == observability["gitops_total"],
+              "one or more Argo CD applications are unhealthy",
+          )
+          require(
+              observability["prometheus_uptime_seconds"] > 0,
+              "Prometheus uptime is unavailable",
+          )
+          require(observability["grafana"]["reachable"] is True, "Grafana is unavailable")
+          require(observability["grafana"]["database"] == "ok", "Grafana database is unhealthy")
+          require(observability["grafana"]["version"], "Grafana version is unavailable")
 
-          assert cluster["nodes_ready"] == cluster["nodes_total"]
-          assert cluster["pods_ready"] == cluster["pods_total"]
-          assert cluster["deployments_available"] == cluster["deployments_desired"]
-          assert 0 <= cluster["cpu_percent"] <= 100
-          assert 0 <= cluster["memory_percent"] <= 100
-          assert cluster["uptime_seconds"] > 0
+          require(robot["exporter_up"] is True, "ROS exporter is down")
+          require(robot["nodes"] > 0, "live ROS nodes are unavailable")
+          require(robot["topics"] > 0, "live ROS topics are unavailable")
+          require(robot["collection_errors"] == 0, "ROS collection reports errors")
+          require(robot["runtime_uptime_seconds"] > 0, "robot runtime uptime is unavailable")
+          require(robot["container_restarts"] >= 0, "robot restart count is unavailable")
+
+          require(cluster["nodes_ready"] == cluster["nodes_total"], "a K3s node is not ready")
+          require(cluster["pods_ready"] == cluster["pods_total"], "a Robotek pod is not ready")
+          require(
+              cluster["deployments_available"] == cluster["deployments_desired"],
+              "a Robotek deployment is unavailable",
+          )
+          require(0 <= cluster["cpu_percent"] <= 100, "cluster CPU is unavailable")
+          require(0 <= cluster["memory_percent"] <= 100, "cluster memory is unavailable")
+          require(cluster["uptime_seconds"] > 0, "K3s uptime is unavailable")
           PY
             then
               telemetry_valid=true
@@ -348,7 +386,11 @@ jobs:
             sleep 5
           done
 
-          test "${telemetry_valid}" = true
+          if [[ "${telemetry_valid}" != true ]]; then
+            echo "Live telemetry did not satisfy the deployment contract:" >&2
+            python3 -m json.tool /tmp/robotek-platform.json >&2
+            exit 1
+          fi
           python3 -m json.tool /tmp/robotek-platform.json
 
       - name: Deployment summary
