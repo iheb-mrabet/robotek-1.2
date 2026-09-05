@@ -14,6 +14,9 @@ resource "aws_security_group" "k3s" {
     }
   }
 
+  # The Academy host must reach changing Ubuntu mirror addresses over HTTP.
+  # Reassess whether a managed proxy is available before this exception expires.
+  #trivy:ignore:AVD-AWS-0104:exp:2026-11-30
   egress {
     description = "HTTP package access"
     protocol    = "tcp"
@@ -22,6 +25,9 @@ resource "aws_security_group" "k3s" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # GitHub, Helm, Docker Hub and container registries use changing HTTPS endpoints.
+  # Reassess whether a managed proxy is available before this exception expires.
+  #trivy:ignore:AVD-AWS-0104:exp:2026-11-30
   egress {
     description = "HTTPS package, image, chart and Git access"
     protocol    = "tcp"
