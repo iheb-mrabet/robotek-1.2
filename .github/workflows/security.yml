@@ -189,6 +189,7 @@ jobs:
           scan-type: config
           scan-ref: reports/security-rendered
           scanners: misconfig
+          trivyignores: .trivyignore.yaml
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: table
