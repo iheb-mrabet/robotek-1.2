@@ -34,7 +34,8 @@ kubectl create namespace robotek-demo --dry-run=client -o yaml | kubectl apply -
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
 if ! kubectl -n robotek-demo get secret robotek-demo-database >/dev/null 2>&1; then
-  db_password="$(openssl rand -base64 36 | tr -d '\n')"
+  # Hex is URL-safe when embedded in the PostgreSQL connection URI.
+  db_password="$(openssl rand -hex 32)"
   kubectl -n robotek-demo create secret generic robotek-demo-database \
     --from-literal=POSTGRES_DB=robotek \
     --from-literal=POSTGRES_USER=robotek \
