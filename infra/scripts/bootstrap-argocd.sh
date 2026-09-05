@@ -4,6 +4,11 @@ set -Eeuo pipefail
 source /etc/robotek/bootstrap.env
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
+if [[ ! "${ROBOTEK_REPOSITORY_REVISION}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+  echo "Unsafe repository revision: ${ROBOTEK_REPOSITORY_REVISION}" >&2
+  exit 1
+fi
+
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 helm repo add argo https://argoproj.github.io/argo-helm --force-update
 helm repo update argo
@@ -53,6 +58,12 @@ for manifest in \
   robotek-observability.yaml \
   robotek-runtime-security.yaml
 do
-  kubectl apply -f "/opt/robotek/repository/deploy/argocd/${manifest}"
+  # Keep every Argo CD Application on the exact revision selected for this
+  # rebuild. This is required while the portable infrastructure is validated
+  # from an unmerged branch and prevents fallback to stale main-branch values.
+  sed \
+    -e "s|^    targetRevision: .*$|    targetRevision: ${ROBOTEK_REPOSITORY_REVISION}|" \
+    "/opt/robotek/repository/deploy/argocd/${manifest}" \
+    | kubectl apply -f -
 done
 touch /var/lib/robotek/argocd-complete
