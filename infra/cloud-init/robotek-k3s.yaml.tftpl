@@ -1,0 +1,43 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - openssl
+  - unzip
+
+write_files:
+  - path: /etc/robotek/bootstrap.env
+    owner: root:root
+    permissions: "0600"
+    content: |
+      ROBOTEK_REPOSITORY_URL='${repository_url}'
+      ROBOTEK_REPOSITORY_REVISION='${repository_revision}'
+      K3S_VERSION='${k3s_version}'
+      HELM_VERSION='${helm_version}'
+      ARGOCD_CHART_VERSION='${argocd_chart_version}'
+  - path: /usr/local/sbin/robotek-bootstrap-k3s
+    owner: root:root
+    permissions: "0750"
+    encoding: b64
+    content: ${bootstrap_k3s_b64}
+  - path: /usr/local/sbin/robotek-bootstrap-argocd
+    owner: root:root
+    permissions: "0750"
+    encoding: b64
+    content: ${bootstrap_argocd_b64}
+  - path: /usr/local/sbin/robotek-verify-platform
+    owner: root:root
+    permissions: "0750"
+    encoding: b64
+    content: ${verify_platform_b64}
+
+runcmd:
+  - [bash, -lc, "/usr/local/sbin/robotek-bootstrap-k3s"]
+  - [bash, -lc, "/usr/local/sbin/robotek-bootstrap-argocd"]
+  - [bash, -lc, "touch /var/lib/robotek/bootstrap-complete"]
+
+final_message: "Robotek bootstrap completed after $UPTIME seconds"
