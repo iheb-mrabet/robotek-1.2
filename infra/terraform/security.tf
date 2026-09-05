@@ -15,11 +15,27 @@ resource "aws_security_group" "k3s" {
   }
 
   egress {
-    description = "Package, image and Git access"
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
+    description = "HTTP package access"
+    protocol    = "tcp"
+    from_port   = 80
+    to_port     = 80
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "HTTPS package, image, chart and Git access"
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Amazon Time Sync Service"
+    protocol    = "udp"
+    from_port   = 123
+    to_port     = 123
+    cidr_blocks = ["169.254.169.123/32"]
   }
 
   lifecycle {
