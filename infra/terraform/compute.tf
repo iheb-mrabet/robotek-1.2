@@ -6,12 +6,13 @@ resource "aws_key_pair" "operator" {
 }
 
 resource "aws_instance" "k3s" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.instance_type
-  subnet_id              = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.k3s.id]
-  key_name               = var.enable_ssh ? aws_key_pair.operator[0].key_name : null
-  iam_instance_profile   = var.instance_profile_name != "" ? var.instance_profile_name : null
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.public.id
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.k3s.id]
+  key_name                    = var.enable_ssh ? aws_key_pair.operator[0].key_name : null
+  iam_instance_profile        = var.instance_profile_name != "" ? var.instance_profile_name : null
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/../cloud-init/robotek-k3s.yaml.tftpl", {
