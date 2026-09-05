@@ -108,7 +108,7 @@ jobs:
   trivy-filesystem:
     name: Trivy repository scan
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -116,24 +116,93 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Scan repository dependencies and configuration
+      - name: Scan repository dependencies
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,misconfig
+          scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
           format: table
           output: trivy-filesystem.txt
 
+      - name: Scan Terraform configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra/terraform
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          output: trivy-terraform.txt
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5.0.0
+        with:
+          version: v3.21.1
+
+      - name: Render Kubernetes manifests for scanning
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          helm repo add prometheus-community \
+            https://prometheus-community.github.io/helm-charts
+          helm repo add falcosecurity \
+            https://falcosecurity.github.io/charts
+
+          helm dependency build deploy/helm/observability
+          helm dependency build deploy/helm/runtime-security
+
+          mkdir -p reports/security-rendered
+
+          helm template robotek-staging deploy/helm/robotek \
+            --namespace robotek-staging \
+            --kube-version 1.34.1 \
+            --values deploy/helm/robotek/values-staging.yaml \
+            > reports/security-rendered/robotek-staging.yaml
+
+          helm template robotek-demo deploy/helm/robotek-demo \
+            --namespace robotek-demo \
+            --kube-version 1.34.1 \
+            --values deploy/helm/robotek-demo/values-staging.yaml \
+            > reports/security-rendered/robotek-demo.yaml
+
+          helm template robotek-observability deploy/helm/observability \
+            --namespace monitoring \
+            --kube-version 1.34.1 \
+            --values deploy/helm/observability/values-staging.yaml \
+            > reports/security-rendered/robotek-observability.yaml
+
+          helm template robotek-runtime-security deploy/helm/runtime-security \
+            --namespace runtime-security \
+            --kube-version 1.34.1 \
+            --values deploy/helm/runtime-security/values-staging.yaml \
+            > reports/security-rendered/robotek-runtime-security.yaml
+
+      - name: Scan rendered Kubernetes manifests
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: reports/security-rendered
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          output: trivy-kubernetes.txt
+
       - name: Upload filesystem scan report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: trivy-filesystem-${{ github.run_id }}
-          path: trivy-filesystem.txt
+          path: |
+            trivy-filesystem.txt
+            trivy-terraform.txt
+            trivy-kubernetes.txt
           if-no-files-found: warn
           retention-days: 14
 
