@@ -1,0 +1,47 @@
+name: Infrastructure Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - infra/**
+      - Makefile
+      - .github/workflows/infra-validation.yml
+  push:
+    branches:
+      - main
+    paths:
+      - infra/**
+      - Makefile
+      - .github/workflows/infra-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform format and validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.1
+      - name: Check formatting
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+      - name: Initialize without remote state
+        run: terraform -chdir=infra/terraform init -backend=false
+      - name: Validate configuration
+        run: terraform -chdir=infra/terraform validate
+
+  scripts:
+    name: Bootstrap script syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Parse all shell scripts
+        run: bash -n infra/scripts/*.sh
