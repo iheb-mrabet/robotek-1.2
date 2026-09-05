@@ -40,6 +40,15 @@ endpoint_contains() {
   kubectl get --raw "${path}" | grep -Fq "${expected}"
 }
 
+endpoint_json_field_equals() {
+  local path="$1"
+  local field="$2"
+  local expected="$3"
+  kubectl get --raw "${path}" \
+    | jq -e --arg field "${field}" --arg expected "${expected}" \
+      '.[$field] == $expected' >/dev/null
+}
+
 check "Robotek demo readiness endpoint" endpoint_contains \
   "/api/v1/namespaces/robotek-demo/services/http:robotek-demo-frontend:80/proxy/ready" \
   '"status":"ready"'
@@ -49,9 +58,10 @@ check "Robotek metrics readiness endpoint" endpoint_contains \
 check "Prometheus readiness endpoint" endpoint_contains \
   "/api/v1/namespaces/monitoring/services/http:robotek-monitoring-prometheus:9090/proxy/-/ready" \
   "Prometheus Server is Ready"
-check "Grafana database health endpoint" endpoint_contains \
+check "Grafana database health endpoint" endpoint_json_field_equals \
   "/api/v1/namespaces/monitoring/services/http:robotek-grafana:80/proxy/api/health" \
-  '"database":"ok"'
+  "database" \
+  "ok"
 check "Alertmanager readiness endpoint" endpoint_contains \
   "/api/v1/namespaces/monitoring/services/http:robotek-monitoring-alertmanager:9093/proxy/-/ready" \
   "OK"
