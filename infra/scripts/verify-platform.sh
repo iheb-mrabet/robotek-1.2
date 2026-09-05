@@ -34,6 +34,28 @@ for namespace in robotek-staging robotek-demo monitoring runtime-security; do
   check "Namespace ${namespace} exists" kubectl get namespace "${namespace}"
 done
 
+endpoint_contains() {
+  local path="$1"
+  local expected="$2"
+  kubectl get --raw "${path}" | grep -Fq "${expected}"
+}
+
+check "Robotek demo readiness endpoint" endpoint_contains \
+  "/api/v1/namespaces/robotek-demo/services/http:robotek-demo-frontend:80/proxy/ready" \
+  '"status":"ready"'
+check "Robotek metrics readiness endpoint" endpoint_contains \
+  "/api/v1/namespaces/robotek-staging/services/http:robotek-staging-metrics:9108/proxy/-/ready" \
+  "OK"
+check "Prometheus readiness endpoint" endpoint_contains \
+  "/api/v1/namespaces/monitoring/services/http:robotek-monitoring-prometheus:9090/proxy/-/ready" \
+  "Prometheus Server is Ready"
+check "Grafana database health endpoint" endpoint_contains \
+  "/api/v1/namespaces/monitoring/services/http:robotek-grafana:80/proxy/api/health" \
+  '"database":"ok"'
+check "Alertmanager readiness endpoint" endpoint_contains \
+  "/api/v1/namespaces/monitoring/services/http:robotek-monitoring-alertmanager:9093/proxy/-/ready" \
+  "OK"
+
 kubectl -n argocd get applications \
   -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision
 kubectl get pods -A -o wide
@@ -43,4 +65,4 @@ if [[ "${failed}" -ne 0 ]]; then
   exit 1
 fi
 
-echo "Base platform and Argo CD application checks passed. Endpoint-level proof is still required."
+echo "Base platform, Argo CD applications, and private service endpoints passed."
