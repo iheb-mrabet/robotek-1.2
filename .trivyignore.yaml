@@ -1,48 +1,48 @@
 misconfigurations:
   - id: KSV-0009
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: Prometheus node-exporter requires the host network to collect node metrics.
     expired_at: 2026-11-30
   - id: KSV-0010
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: Prometheus node-exporter requires host PID visibility to collect process metrics.
     expired_at: 2026-11-30
   - id: KSV-0014
     paths:
-      - reports/security-rendered/robotek-observability.yaml
-      - reports/security-rendered/robotek-runtime-security.yaml
+      - robotek-observability.yaml
+      - robotek-runtime-security.yaml
     statement: The pinned Grafana sidecars and Falco chart require writable runtime paths.
     expired_at: 2026-11-30
   - id: KSV-0041
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: The pinned monitoring stack requires secret discovery and operator reconciliation RBAC.
     expired_at: 2026-11-30
   - id: KSV-0045
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: The pinned Prometheus operator requires wildcard verbs for its managed custom resources.
     expired_at: 2026-11-30
   - id: KSV-0056
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: The pinned Prometheus operator reconciles monitoring services and network resources.
     expired_at: 2026-11-30
   - id: KSV-0114
     paths:
-      - reports/security-rendered/robotek-observability.yaml
+      - robotek-observability.yaml
     statement: The pinned Prometheus operator manages its admission webhook configuration.
     expired_at: 2026-11-30
   - id: KSV-0118
     paths:
-      - reports/security-rendered/robotek-runtime-security.yaml
+      - robotek-runtime-security.yaml
     statement: Falco requires elevated runtime privileges to observe kernel security events.
     expired_at: 2026-11-30
   - id: KSV-0121
     paths:
-      - reports/security-rendered/robotek-observability.yaml
-      - reports/security-rendered/robotek-runtime-security.yaml
+      - robotek-observability.yaml
+      - robotek-runtime-security.yaml
     statement: Node-exporter and Falco require read-only host mounts for node and runtime telemetry.
     expired_at: 2026-11-30
