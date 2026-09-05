@@ -9,6 +9,8 @@ if ! command -v k3s >/dev/null 2>&1; then
     | INSTALL_K3S_VERSION="${K3S_VERSION}" sh -s - server \
       --disable traefik \
       --disable servicelb \
+      --cluster-cidr 10.244.0.0/16 \
+      --resolv-conf /run/systemd/resolve/resolv.conf \
       --secrets-encryption \
       --write-kubeconfig-mode 0640
 fi
