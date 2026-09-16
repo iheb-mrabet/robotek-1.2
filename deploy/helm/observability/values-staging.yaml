@@ -118,19 +118,8 @@ monitoring:
         group_interval: 1m
         repeat_interval: 4h
 
-        routes:
-          - receiver: robotek-telegram
-            matchers:
-              - 'service = "robotek"'
-
       receivers:
         - name: "null"
-
-        - name: robotek-telegram
-          telegram_configs:
-            - bot_token_file: /etc/alertmanager/secrets/robotek-telegram/bot-token
-              chat_id: 7796850659
-              send_resolved: true
 
       inhibit_rules:
         - source_matchers:
@@ -153,8 +142,7 @@ monitoring:
     alertmanagerSpec:
       replicas: 1
 
-      secrets:
-        - robotek-telegram
+      secrets: []
 
       resources:
         requests:

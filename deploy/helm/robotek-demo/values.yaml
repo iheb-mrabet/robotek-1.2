@@ -14,7 +14,9 @@ imagePullPolicy: Always
 database:
   name: robotek
   user: robotek
-  password: robotek-demo-password
+  existingSecret: robotek-demo-database
+  createSecret: false
+  password: ""
 
 frontend:
   nodePort: 30080

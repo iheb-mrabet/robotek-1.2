@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
+import unittest
 
 import launch
 import launch_testing
+import launch_testing.asserts
 import pytest
 import rclpy
 from launch_ros.actions import Node
@@ -40,7 +42,7 @@ def generate_test_description():
     )
 
 
-class TestCoreLaunch:
+class TestCoreLaunch(unittest.TestCase):
     def test_main_nodes_expose_expected_topics(self) -> None:
         rclpy.init()
         node = rclpy.create_node("core_launch_topic_probe")
@@ -54,8 +56,8 @@ class TestCoreLaunch:
 
 
 @launch_testing.post_shutdown_test()
-class TestProcessExit:
+class TestProcessExit(unittest.TestCase):
     def test_processes_exit_cleanly(self, proc_info, waypoint, safety, mission) -> None:
-        proc_info.assertWaitForShutdown(process=waypoint, timeout=5)
-        proc_info.assertWaitForShutdown(process=safety, timeout=5)
-        proc_info.assertWaitForShutdown(process=mission, timeout=5)
+        launch_testing.asserts.assertExitCodes(proc_info, process=waypoint)
+        launch_testing.asserts.assertExitCodes(proc_info, process=safety)
+        launch_testing.asserts.assertExitCodes(proc_info, process=mission)

@@ -1,4 +1,5 @@
 import time
+import unittest
 
 import launch
 import launch_testing
@@ -31,7 +32,7 @@ def generate_test_description():
     return launch.LaunchDescription([full_simulation, launch_testing.actions.ReadyToTest()])
 
 
-class TestSimulationTopics:
+class TestSimulationTopics(unittest.TestCase):
     def test_core_simulation_topics_receive_messages(self) -> None:
         rclpy.init()
         node = rclpy.create_node("simulation_topic_probe")
