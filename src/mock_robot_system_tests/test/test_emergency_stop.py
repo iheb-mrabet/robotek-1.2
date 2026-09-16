@@ -3,6 +3,7 @@ import unittest
 
 import launch
 import launch_testing
+import launch_testing.asserts
 import pytest
 import rclpy
 from geometry_msgs.msg import Twist
@@ -61,5 +62,5 @@ class TestEmergencyStop(unittest.TestCase):
 @launch_testing.post_shutdown_test()
 class TestEmergencyStopShutdown(unittest.TestCase):
     def test_processes_exit_cleanly(self, proc_info, safety, mission) -> None:
-        proc_info.assertWaitForShutdown(process=safety, timeout=5)
-        proc_info.assertWaitForShutdown(process=mission, timeout=5)
+        launch_testing.asserts.assertExitCodes(proc_info, process=safety)
+        launch_testing.asserts.assertExitCodes(proc_info, process=mission)

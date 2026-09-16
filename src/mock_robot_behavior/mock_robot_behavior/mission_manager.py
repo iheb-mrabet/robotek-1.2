@@ -73,7 +73,10 @@ class MissionManager(Node):
             }
         ):
             return GoalResponse.REJECT
-        validation = self._validator.validate(goal_request.target_x, goal_request.target_y)
+        current_x, current_y = self._current_position()
+        validation = self._validator.validate(
+            goal_request.target_x, goal_request.target_y, current_x, current_y
+        )
         if not validation.accepted:
             return GoalResponse.REJECT
         # Reserve before returning ACCEPT, so queued goals cannot both be accepted.
@@ -173,6 +176,14 @@ class MissionManager(Node):
                 await self._wait_for_update()
             return self._finish_failure(goal_handle, result, "ROS shutdown interrupted delivery.")
         finally:
+            # Clear the controller target on every unsuccessful exit. This also
+            # prevents releasing an emergency stop from resuming an old mission.
+            if (
+                rclpy.ok()
+                and self._latest_odom is not None
+                and self._state_machine.state != MissionState.COMPLETED
+            ):
+                self._publish_target(*self._current_position())
             self._active_goal = False
             if (
                 self._state_machine.state == MissionState.EMERGENCY_STOPPED

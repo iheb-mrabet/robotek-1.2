@@ -5,6 +5,7 @@ import unittest
 
 import launch
 import launch_testing
+import launch_testing.asserts
 import pytest
 import rclpy
 from launch_ros.actions import Node
@@ -57,6 +58,6 @@ class TestCoreLaunch(unittest.TestCase):
 @launch_testing.post_shutdown_test()
 class TestProcessExit(unittest.TestCase):
     def test_processes_exit_cleanly(self, proc_info, waypoint, safety, mission) -> None:
-        proc_info.assertWaitForShutdown(process=waypoint, timeout=5)
-        proc_info.assertWaitForShutdown(process=safety, timeout=5)
-        proc_info.assertWaitForShutdown(process=mission, timeout=5)
+        launch_testing.asserts.assertExitCodes(proc_info, process=waypoint)
+        launch_testing.asserts.assertExitCodes(proc_info, process=safety)
+        launch_testing.asserts.assertExitCodes(proc_info, process=mission)

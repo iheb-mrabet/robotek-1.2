@@ -8,6 +8,7 @@ import launch_testing
 import pytest
 import rclpy
 from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import PointStamped
 from launch_ros.actions import Node
 from mock_robot_interfaces.action import ExecuteDelivery
 from mock_robot_interfaces.srv import EmergencyStop
@@ -36,6 +37,10 @@ class TestMissionActionRuntime(unittest.TestCase):
             client = ActionClient(node, ExecuteDelivery, "/execute_delivery")
             stop = node.create_client(EmergencyStop, "/mission/emergency_stop")
             odom = node.create_publisher(Odometry, "/odom", 20)
+            targets = []
+            node.create_subscription(
+                PointStamped, "/mission/target", lambda msg: targets.append(msg.point.x), 20
+            )
             assert client.wait_for_server(timeout_sec=10.0)
             assert stop.wait_for_service(timeout_sec=10.0)
 
@@ -80,9 +85,17 @@ class TestMissionActionRuntime(unittest.TestCase):
             assert completed.result.final_state == "COMPLETED"
             assert completed.result.message
 
+            # Origin is a valid destination when the robot is away from it.
+            goal = send(0.0)
+            assert goal.accepted
+            move(0.0)
+            returned = wait(goal.get_result_async())
+            assert returned.status == GoalStatus.STATUS_SUCCEEDED
+
             goal = send(2.0)
             assert goal.accepted
             move(1.0)
+            targets.clear()
             cancellation = wait(goal.cancel_goal_async())
             assert cancellation.goals_canceling
             canceled = wait(goal.get_result_async())
@@ -90,16 +103,19 @@ class TestMissionActionRuntime(unittest.TestCase):
             assert not canceled.result.success
             assert canceled.result.final_state == "FAILED"
             assert "canceled" in canceled.result.message
+            spin_until(lambda: bool(targets) and targets[-1] == 1.0)
 
             goal = send(2.0)
             assert goal.accepted
             move(1.0)
+            targets.clear()
             set_stop(True)
             stopped = wait(goal.get_result_async())
             assert stopped.status == GoalStatus.STATUS_ABORTED
             assert not stopped.result.success
             assert stopped.result.final_state == "EMERGENCY_STOPPED"
             assert stopped.result.message
+            spin_until(lambda: bool(targets) and targets[-1] == 1.0)
             assert not send(2.0).accepted
             set_stop(False)
 
