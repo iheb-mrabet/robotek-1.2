@@ -1,6 +1,7 @@
 """Exercise the real action callback under a single-threaded ROS executor."""
 
 import time
+import unittest
 
 import launch
 import launch_testing
@@ -27,7 +28,7 @@ def generate_test_description():
     return launch.LaunchDescription([mission, launch_testing.actions.ReadyToTest()])
 
 
-class TestMissionActionRuntime:
+class TestMissionActionRuntime(unittest.TestCase):
     def test_completion_cancel_stop_and_timeout(self):
         rclpy.init()
         node = rclpy.create_node("mission_action_runtime_probe")

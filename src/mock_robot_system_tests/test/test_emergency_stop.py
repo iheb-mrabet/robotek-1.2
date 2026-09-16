@@ -1,4 +1,5 @@
 import time
+import unittest
 
 import launch
 import launch_testing
@@ -22,7 +23,7 @@ def generate_test_description():
     )
 
 
-class TestEmergencyStop:
+class TestEmergencyStop(unittest.TestCase):
     def test_emergency_stop_forces_zero_command(self) -> None:
         rclpy.init()
         node = rclpy.create_node("emergency_stop_probe")
@@ -58,7 +59,7 @@ class TestEmergencyStop:
 
 
 @launch_testing.post_shutdown_test()
-class TestEmergencyStopShutdown:
+class TestEmergencyStopShutdown(unittest.TestCase):
     def test_processes_exit_cleanly(self, proc_info, safety, mission) -> None:
         proc_info.assertWaitForShutdown(process=safety, timeout=5)
         proc_info.assertWaitForShutdown(process=mission, timeout=5)
