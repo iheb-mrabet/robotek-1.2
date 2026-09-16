@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - infra/**
+      - deploy/argocd/**
+      - deploy/helm/observability/**
+      - scripts/validate_argocd_metrics.py
       - Makefile
       - .github/workflows/infra-validation.yml
   push:
@@ -13,6 +16,9 @@ on:
       - main
     paths:
       - infra/**
+      - deploy/argocd/**
+      - deploy/helm/observability/**
+      - scripts/validate_argocd_metrics.py
       - Makefile
       - .github/workflows/infra-validation.yml
   workflow_dispatch:
@@ -45,3 +51,26 @@ jobs:
       - uses: actions/checkout@v6
       - name: Parse all shell scripts
         run: bash -n infra/scripts/*.sh
+
+  argocd-metrics:
+    name: Argo metrics discovery contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.21.1
+      - name: Render the pinned Argo and monitoring charts
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build deploy/helm/observability
+          helm template argocd argo/argo-cd --version 8.5.7 -n argocd \
+            -f deploy/argocd/values-staging.yaml > /tmp/robotek-argocd.yaml
+          helm template robotek-observability deploy/helm/observability -n monitoring \
+            -f deploy/helm/observability/values-staging.yaml > /tmp/robotek-monitoring.yaml
+      - name: Verify namespace selectors, Service labels and metrics ports
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          python3 scripts/validate_argocd_metrics.py /tmp/robotek-argocd.yaml /tmp/robotek-monitoring.yaml

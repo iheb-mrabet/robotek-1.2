@@ -15,4 +15,5 @@ python3 -m pytest \
   -c src/mock_robot_system_tests/pytest.ini \
   src/mock_robot_system_tests/test/test_core_launch.py \
   src/mock_robot_system_tests/test/test_emergency_stop.py \
+  src/mock_robot_system_tests/test/test_mission_action_runtime.py \
   --junitxml=reports/integration/pytest.xml

@@ -9,16 +9,6 @@ if [[ ! "${ROBOTEK_REPOSITORY_REVISION}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
   exit 1
 fi
 
-kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-helm repo add argo https://argoproj.github.io/argo-helm --force-update
-helm repo update argo
-helm upgrade --install argocd argo/argo-cd \
-  --namespace argocd \
-  --version "${ARGOCD_CHART_VERSION}" \
-  --set server.service.type=ClusterIP \
-  --set configs.params.server\.insecure=false \
-  --wait --timeout 10m
-
 install -d -m 0755 /opt/robotek
 if [[ ! -d /opt/robotek/repository/.git ]]; then
   git clone --branch "${ROBOTEK_REPOSITORY_REVISION}" --single-branch \
@@ -28,6 +18,17 @@ else
   git -C /opt/robotek/repository checkout "${ROBOTEK_REPOSITORY_REVISION}"
   git -C /opt/robotek/repository pull --ff-only origin "${ROBOTEK_REPOSITORY_REVISION}"
 fi
+
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+helm repo add argo https://argoproj.github.io/argo-helm --force-update
+helm repo update argo
+helm upgrade --install argocd argo/argo-cd \
+  --namespace argocd \
+  --version "${ARGOCD_CHART_VERSION}" \
+  --values /opt/robotek/repository/deploy/argocd/values-staging.yaml \
+  --set server.service.type=ClusterIP \
+  --set configs.params.server\.insecure=false \
+  --wait --timeout 10m
 
 # Create namespaces and runtime secrets before Argo CD starts dependent Pods.
 kubectl create namespace robotek-demo --dry-run=client -o yaml | kubectl apply -f -

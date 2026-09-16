@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from math import hypot
 
 import rclpy
@@ -10,7 +9,10 @@ from mock_robot_interfaces.msg import MissionStatus
 from mock_robot_interfaces.srv import EmergencyStop
 from nav_msgs.msg import Odometry
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.task import Future
 from std_msgs.msg import Bool
 
 from mock_robot_behavior.mission_state_machine import (
@@ -33,6 +35,7 @@ class MissionManager(Node):
         self._latest_odom: Odometry | None = None
         self._active_goal = False
         self._emergency_stop_active = False
+        self._mission_stopped = False
         self._status_message = "Waiting for delivery request."
         self._remaining_distance = 0.0
 
@@ -49,6 +52,7 @@ class MissionManager(Node):
             execute_callback=self._execute_delivery,
             goal_callback=self._on_goal,
             cancel_callback=self._on_cancel,
+            callback_group=ReentrantCallbackGroup(),
         )
 
         period = 1.0 / max(self._status_rate_hz, 0.1)
@@ -58,14 +62,24 @@ class MissionManager(Node):
         self._latest_odom = msg
 
     def _on_goal(self, goal_request: ExecuteDelivery.Goal) -> GoalResponse:
-        if self._active_goal or self._state_machine.state not in {
-            MissionState.IDLE,
-            MissionState.COMPLETED,
-            MissionState.FAILED,
-        }:
+        if (
+            self._active_goal
+            or self._emergency_stop_active
+            or self._state_machine.state
+            not in {
+                MissionState.IDLE,
+                MissionState.COMPLETED,
+                MissionState.FAILED,
+            }
+        ):
             return GoalResponse.REJECT
         validation = self._validator.validate(goal_request.target_x, goal_request.target_y)
-        return GoalResponse.ACCEPT if validation.accepted else GoalResponse.REJECT
+        if not validation.accepted:
+            return GoalResponse.REJECT
+        # Reserve before returning ACCEPT, so queued goals cannot both be accepted.
+        self._active_goal = True
+        self._mission_stopped = False
+        return GoalResponse.ACCEPT
 
     def _on_cancel(self, _goal_handle: object) -> CancelResponse:
         return CancelResponse.ACCEPT
@@ -78,10 +92,12 @@ class MissionManager(Node):
         self._emergency_stop_active = bool(request.activate)
         self._emergency_pub.publish(Bool(data=self._emergency_stop_active))
         if self._emergency_stop_active:
+            self._mission_stopped = self._active_goal
             self._state_machine.emergency_stop()
             self._status_message = "Emergency stop is active."
         elif self._state_machine.state == MissionState.EMERGENCY_STOPPED:
-            self._state_machine.reset()
+            if not self._active_goal:
+                self._state_machine.reset()
             self._status_message = "Emergency stop released."
         response.success = True
         response.message = self._status_message
@@ -94,6 +110,11 @@ class MissionManager(Node):
         result = ExecuteDelivery.Result()
 
         try:
+            if self._emergency_stop_active or self._mission_stopped:
+                self._state_machine.emergency_stop()
+                self._status_message = "Delivery stopped by emergency stop."
+                goal_handle.abort()
+                return self._populate_result(result, success=False)
             if self._state_machine.state != MissionState.IDLE:
                 self._state_machine.reset()
             self._state_machine.begin_validation()
@@ -114,16 +135,16 @@ class MissionManager(Node):
             started_at = self.get_clock().now()
 
             while rclpy.ok():
+                if self._emergency_stop_active or self._mission_stopped:
+                    self._state_machine.emergency_stop()
+                    self._status_message = "Delivery stopped by emergency stop."
+                    goal_handle.abort()
+                    return self._populate_result(result, success=False)
+
                 if goal_handle.is_cancel_requested:
                     self._state_machine.fail()
                     self._status_message = "Delivery mission canceled."
                     goal_handle.canceled()
-                    return self._populate_result(result, success=False)
-
-                if self._emergency_stop_active:
-                    self._state_machine.emergency_stop()
-                    self._status_message = "Delivery stopped by emergency stop."
-                    goal_handle.abort()
                     return self._populate_result(result, success=False)
 
                 current_x, current_y = self._current_position()
@@ -149,9 +170,33 @@ class MissionManager(Node):
                 feedback.state = self._state_machine.state.value
                 goal_handle.publish_feedback(feedback)
                 self._publish_status()
-                await asyncio.sleep(0.2)
+                await self._wait_for_update()
+            return self._finish_failure(goal_handle, result, "ROS shutdown interrupted delivery.")
         finally:
             self._active_goal = False
+            if (
+                self._state_machine.state == MissionState.EMERGENCY_STOPPED
+                and not self._emergency_stop_active
+            ):
+                self._state_machine.reset()
+                self._status_message = "Emergency stop released."
+                self._publish_status()
+
+    async def _wait_for_update(self) -> None:
+        # rclpy executes coroutines without an asyncio event loop. A ROS Future
+        # yields to its executor so odometry, cancel and stop callbacks can run.
+        ready: Future = Future()
+
+        def wake() -> None:
+            timer.cancel()
+            if not ready.done():
+                ready.set_result(None)
+
+        timer = self.create_timer(0.2, wake)
+        try:
+            await ready
+        finally:
+            self.destroy_timer(timer)
 
     def _finish_failure(
         self, goal_handle, result: ExecuteDelivery.Result, message: str
@@ -199,9 +244,11 @@ def main(args: list[str] | None = None) -> None:
     node = MissionManager()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":
