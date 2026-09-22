@@ -150,6 +150,11 @@ class MissionManager(Node):
                     goal_handle.canceled()
                     return self._populate_result(result, success=False)
 
+                # Refresh the active target while navigating.  The action
+                # server may become ready before DDS discovery connects the
+                # waypoint subscriber, so relying on one volatile publication
+                # can leave an accepted mission without a controller target.
+                self._publish_target(request.target_x, request.target_y)
                 current_x, current_y = self._current_position()
                 self._remaining_distance = hypot(
                     request.target_x - current_x, request.target_y - current_y
