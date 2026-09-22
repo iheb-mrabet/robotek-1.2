@@ -73,9 +73,7 @@ class TestCoreLaunch(unittest.TestCase):
                 rclpy.spin_once(node, timeout_sec=0.1)
 
             assert len(received) >= 3
-            assert all(
-                msg.linear.x == 0.0 and msg.angular.z == 0.0 for msg in received[-3:]
-            )
+            assert all(msg.linear.x == 0.0 and msg.angular.z == 0.0 for msg in received[-3:])
         finally:
             node.destroy_node()
             rclpy.shutdown()
