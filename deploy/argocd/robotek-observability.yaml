@@ -5,6 +5,11 @@ metadata:
   name: robotek-observability
   namespace: argocd
 
+  annotations:
+    # Compare the API server's normalized object so Kubernetes defaults on the
+    # Grafana StatefulSet do not create a permanent false OutOfSync result.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+
   labels:
     app.kubernetes.io/name: robotek-observability
     app.kubernetes.io/part-of: robotek

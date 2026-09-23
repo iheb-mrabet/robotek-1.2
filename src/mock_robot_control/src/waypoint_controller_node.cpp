@@ -65,7 +65,16 @@ class WaypointControllerNode : public rclcpp::Node {
 
  private:
   void update() {
-    if (!has_pose_ || !target_x_.has_value() || !target_y_.has_value()) {
+    if (!has_pose_) {
+      return;
+    }
+
+    // Keep sending an explicit idle command after a target is cleared.  The
+    // downstream safety limiter needs successive zero requests to decelerate
+    // cleanly, and Gazebo's DiffDrive system otherwise retains its last
+    // non-zero command indefinitely.
+    if (!target_x_.has_value() || !target_y_.has_value()) {
+      publisher_->publish(geometry_msgs::msg::Twist{});
       return;
     }
 

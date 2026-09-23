@@ -1,4 +1,5 @@
 import time
+import unittest
 from math import hypot
 
 import launch
@@ -28,7 +29,7 @@ def generate_test_description():
     return launch.LaunchDescription([full_simulation, launch_testing.actions.ReadyToTest()])
 
 
-class TestBasicMovement:
+class TestBasicMovement(unittest.TestCase):
     def test_robot_odometry_changes_after_command(self) -> None:
         rclpy.init()
         node = rclpy.create_node("basic_movement_probe")

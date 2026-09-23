@@ -98,7 +98,6 @@ jobs:
 
   integration-tests:
     name: Integration tests
-    if: github.event_name != 'pull_request'
     needs: unit-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
