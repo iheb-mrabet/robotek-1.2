@@ -14,6 +14,7 @@ jq '{
   region: .region.value,
   instance_id: .instance_id.value,
   public_ip: .public_ip.value,
+  public_dashboard_url: .public_dashboard_url.value,
   private_ip: .private_ip.value
 }' "${output_dir}/terraform-outputs.json" > "${output_dir}/rebuild-report.json"
 
