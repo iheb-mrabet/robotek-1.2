@@ -247,6 +247,18 @@ jobs:
           format: table
           output: trivy-image.txt
 
+      - name: Print image scan report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -s trivy-image.txt ]]; then
+            cat trivy-image.txt
+          else
+            echo "Trivy did not produce trivy-image.txt." >&2
+          fi
+
       - name: Upload image scan report
         if: always()
         uses: actions/upload-artifact@v7

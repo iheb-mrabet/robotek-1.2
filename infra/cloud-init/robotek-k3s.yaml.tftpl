@@ -19,6 +19,9 @@ write_files:
       K3S_VERSION='${k3s_version}'
       HELM_VERSION='${helm_version}'
       ARGOCD_CHART_VERSION='${argocd_chart_version}'
+      PUBLIC_DASHBOARD_HOST='${public_dashboard_host}'
+      CADDY_VERSION='${caddy_version}'
+      CADDY_SHA512='${caddy_sha512}'
   - path: /usr/local/sbin/robotek-bootstrap-k3s
     owner: root:root
     permissions: "0750"
@@ -34,10 +37,16 @@ write_files:
     permissions: "0750"
     encoding: b64
     content: ${verify_platform_b64}
+  - path: /usr/local/sbin/robotek-install-public-dashboard
+    owner: root:root
+    permissions: "0750"
+    encoding: b64
+    content: ${public_dashboard_b64}
 
 runcmd:
   - [bash, -lc, "/usr/local/sbin/robotek-bootstrap-k3s"]
   - [bash, -lc, "/usr/local/sbin/robotek-bootstrap-argocd"]
+  - [bash, -lc, "set -a; source /etc/robotek/bootstrap.env; set +a; /usr/local/sbin/robotek-install-public-dashboard"]
   - [bash, -lc, "touch /var/lib/robotek/bootstrap-complete"]
 
 final_message: "Robotek bootstrap completed after $UPTIME seconds"

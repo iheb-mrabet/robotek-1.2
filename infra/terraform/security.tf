@@ -14,6 +14,24 @@ resource "aws_security_group" "k3s" {
     }
   }
 
+  # The dashboard is intentionally public and terminates trusted HTTPS in Caddy.
+  # HTTP remains open for the existing systemd forwarder and explicit health checks.
+  #trivy:ignore:AVD-AWS-0107:exp:2026-11-30
+  dynamic "ingress" {
+    for_each = var.enable_public_dashboard ? {
+      http  = 80
+      https = 443
+    } : {}
+
+    content {
+      description = "Public Robotek dashboard ${ingress.key}"
+      protocol    = "tcp"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   # The Academy host must reach changing Ubuntu mirror addresses over HTTP.
   # Reassess whether a managed proxy is available before this exception expires.
   #trivy:ignore:AVD-AWS-0104:exp:2026-11-30

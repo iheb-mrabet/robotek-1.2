@@ -6,8 +6,11 @@ enable_ssh            = true
 admin_cidr            = "203.0.113.10/32"
 ssh_public_key_path   = "/absolute/path/to/robotek-staging.pub"
 instance_profile_name = "LabInstanceProfile"
+enable_public_dashboard = true
 
 # Pin these deliberately and test before a meeting.
 k3s_version          = "v1.34.1+k3s1"
 helm_version         = "v3.21.1"
 argocd_chart_version = "8.5.7"
+caddy_version        = "v2.11.4"
+caddy_sha512         = "8220d1f013b6f27510247b2360c9e0ca9f018feebd82515f07635318b34ff9777ccc8fd0b6e6f2486ce3a33fe389fbb7db12d05baa474f4587509fb4f5ebf1c9"

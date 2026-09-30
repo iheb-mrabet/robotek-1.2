@@ -16,14 +16,18 @@ resource "aws_instance" "k3s" {
 
   user_data_replace_on_change = true
   user_data = templatefile("${path.module}/../cloud-init/robotek-k3s.yaml.tftpl", {
-    bootstrap_k3s_b64    = base64encode(file("${path.module}/../scripts/bootstrap-k3s.sh"))
-    bootstrap_argocd_b64 = base64encode(file("${path.module}/../scripts/bootstrap-argocd.sh"))
-    verify_platform_b64  = base64encode(file("${path.module}/../scripts/verify-platform.sh"))
-    repository_url       = var.repository_url
-    repository_revision  = var.repository_revision
-    k3s_version          = var.k3s_version
-    helm_version         = var.helm_version
-    argocd_chart_version = var.argocd_chart_version
+    bootstrap_k3s_b64     = base64encode(file("${path.module}/../scripts/bootstrap-k3s.sh"))
+    bootstrap_argocd_b64  = base64encode(file("${path.module}/../scripts/bootstrap-argocd.sh"))
+    verify_platform_b64   = base64encode(file("${path.module}/../scripts/verify-platform.sh"))
+    public_dashboard_b64  = base64encode(file("${path.module}/../scripts/install-public-dashboard.sh"))
+    repository_url        = var.repository_url
+    repository_revision   = var.repository_revision
+    k3s_version           = var.k3s_version
+    helm_version          = var.helm_version
+    argocd_chart_version  = var.argocd_chart_version
+    public_dashboard_host = local.dashboard_hostname
+    caddy_version         = var.caddy_version
+    caddy_sha512          = var.caddy_sha512
   })
 
   metadata_options {

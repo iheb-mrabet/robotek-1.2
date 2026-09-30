@@ -50,7 +50,8 @@ RUN python3 -m pip install \
         --upgrade \
         "setuptools==78.1.1" \
         "msgpack==1.2.1" \
-    && python3 -c 'import importlib.metadata as m; assert m.version("setuptools") == "78.1.1"; assert m.version("msgpack") == "1.2.1"'
+        "urllib3==2.8.0" \
+    && python3 -c 'import importlib.metadata as m; assert m.version("setuptools") == "78.1.1"; assert m.version("msgpack") == "1.2.1"; assert m.version("urllib3") == "2.8.0"'
 
 RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && /opt/ci-venv/bin/python -m pip install \
@@ -59,6 +60,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         "pip==26.2.1" \
         "setuptools==78.1.1" \
         "msgpack==1.2.1" \
+        "urllib3==2.8.0" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
         pytest-cov==7.1.0 \
@@ -67,18 +69,24 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && PIP_VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pip; print(pathlib.Path(pip.__file__).parent / "_vendor")')" \
     && MSGPACK_DIR="$(/opt/ci-venv/bin/python -c 'import msgpack, pathlib; print(pathlib.Path(msgpack.__file__).parent)')" \
     && PKG_RESOURCES_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, pkg_resources; print(pathlib.Path(pkg_resources.__file__).parent)')" \
+    && URLLIB3_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, urllib3; print(pathlib.Path(urllib3.__file__).parent)')" \
     && VENDOR_DIR="$(/opt/ci-venv/bin/python -c 'import pathlib, setuptools; print(pathlib.Path(setuptools.__file__).parent / "_vendor")')" \
     && rm -rf \
         "${PIP_VENDOR_DIR}/msgpack" \
         "${PIP_VENDOR_DIR}/pkg_resources" \
+        "${PIP_VENDOR_DIR}/urllib3" \
     && cp -a "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
     && cp -a "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
+    && cp -a "${URLLIB3_DIR}" "${PIP_VENDOR_DIR}/urllib3" \
     && diff -qr "${MSGPACK_DIR}" "${PIP_VENDOR_DIR}/msgpack" \
     && diff -qr "${PKG_RESOURCES_DIR}" "${PIP_VENDOR_DIR}/pkg_resources" \
+    && diff -qr "${URLLIB3_DIR}" "${PIP_VENDOR_DIR}/urllib3" \
     && PIP_PKG_RESOURCES="${PIP_VENDOR_DIR}/pkg_resources/__init__.py" \
     && PIP_PKG_RESOURCES="${PIP_PKG_RESOURCES}" VENDOR_DIR="${VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import os, pathlib; path = pathlib.Path(os.environ["PIP_PKG_RESOURCES"]); text = path.read_text(); old = "os.path.join(os.path.dirname(os.path.dirname(__file__)), '\''setuptools'\'', '\''_vendor'\'')"; new = repr(os.environ["VENDOR_DIR"]); assert text.count(old) == 1; path.write_text(text.replace(old, new))' \
+    && PIP_VENDOR_MANIFEST="${PIP_VENDOR_DIR}/vendor.txt" \
+    && PIP_VENDOR_MANIFEST="${PIP_VENDOR_MANIFEST}" /opt/ci-venv/bin/python -c 'import os, pathlib, re; path = pathlib.Path(os.environ["PIP_VENDOR_MANIFEST"]); text, count = re.subn(r"(?m)^(\s*)urllib3==[^\s]+$", r"\g<1>urllib3==2.8.0", path.read_text()); assert count == 1; path.write_text(text)' \
     && PIP_BOM="${PIP_VENDOR_DIR}/bom.cdx.json" \
-    && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); raw = path.read_text().replace("pkg:pypi/msgpack@1.1.2", "pkg:pypi/msgpack@1.2.1").replace("pkg:pypi/setuptools@70.3.0", "pkg:pypi/setuptools@78.1.1"); data = json.loads(raw); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1"}; [component.update({"version": fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
+    && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); data = json.loads(path.read_text()); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1", "urllib3": "2.8.0"}; [component.update({"version": fixes[component["name"]], "purl": "pkg:pypi/" + component["name"] + "@" + fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
     && PATCH_DIR="$(mktemp -d)" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
@@ -99,7 +107,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && cp -a "${PATCH_DIR}/wheel-0.46.3.dist-info" "${VENDOR_DIR}/" \
     && rm -rf "${PATCH_DIR}" \
     && /opt/ci-venv/bin/python -m pip check \
-    && PIP_VENDOR_DIR="${PIP_VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; from pip._vendor import msgpack, pkg_resources; vendor = pathlib.Path(os.environ["PIP_VENDOR_DIR"]).resolve(); versions = {component["name"]: component["version"] for component in json.loads((vendor / "bom.cdx.json").read_text())["components"] if component["name"] in {"msgpack", "setuptools"}}; assert versions == {"msgpack": "1.2.1", "setuptools": "78.1.1"}; assert msgpack.version == (1, 2, 1); assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in (msgpack, pkg_resources))' \
+    && PIP_VENDOR_DIR="${PIP_VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; from pip._vendor import msgpack, pkg_resources, urllib3; vendor = pathlib.Path(os.environ["PIP_VENDOR_DIR"]).resolve(); expected = {"msgpack": "1.2.1", "setuptools": "78.1.1", "urllib3": "2.8.0"}; versions = {component["name"]: component["version"] for component in json.loads((vendor / "bom.cdx.json").read_text())["components"] if component["name"] in expected}; assert versions == expected; assert msgpack.version == (1, 2, 1); assert urllib3.__version__ == "2.8.0"; assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in (msgpack, pkg_resources, urllib3))' \
     && grep -qx 'Version: 6.1.0' "${VENDOR_DIR}/jaraco_context-6.1.0.dist-info/METADATA" \
     && grep -qx 'Version: 0.46.3' "${VENDOR_DIR}/wheel-0.46.3.dist-info/METADATA" \
     && VENDOR_DIR="${VENDOR_DIR}" python3 -c 'import importlib, os, pathlib, pkg_resources; import jaraco.text; vendor = pathlib.Path(os.environ["VENDOR_DIR"]).resolve(); modules = (importlib.import_module("setuptools._vendor.jaraco.context"), importlib.import_module("setuptools._vendor.jaraco.text"), importlib.import_module("setuptools._vendor.wheel")); assert all(pathlib.Path(module.__file__).resolve().is_relative_to(vendor) for module in modules)'

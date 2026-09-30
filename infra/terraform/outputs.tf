@@ -11,7 +11,11 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  value = aws_instance.k3s.public_ip
+  value = var.enable_public_dashboard ? local.dashboard_public_ip : aws_instance.k3s.public_ip
+}
+
+output "public_dashboard_url" {
+  value = var.enable_public_dashboard ? "https://${local.dashboard_hostname}" : null
 }
 
 output "private_ip" {
@@ -19,9 +23,9 @@ output "private_ip" {
 }
 
 output "ssh_command" {
-  value = var.enable_ssh ? "ssh ubuntu@${aws_instance.k3s.public_ip}" : "SSH disabled; use Session Manager"
+  value = var.enable_ssh ? "ssh ubuntu@${var.enable_public_dashboard ? local.dashboard_public_ip : aws_instance.k3s.public_ip}" : "SSH disabled; use Session Manager"
 }
 
 output "dashboard_tunnel_command" {
-  value = var.enable_ssh ? "ssh -L 30080:127.0.0.1:30080 -L 8080:127.0.0.1:8080 -L 9090:127.0.0.1:9090 -L 3000:127.0.0.1:3000 ubuntu@${aws_instance.k3s.public_ip}" : "Use Session Manager port forwarding"
+  value = var.enable_ssh ? "ssh -L 30080:127.0.0.1:30080 -L 8080:127.0.0.1:8080 -L 9090:127.0.0.1:9090 -L 3000:127.0.0.1:3000 ubuntu@${var.enable_public_dashboard ? local.dashboard_public_ip : aws_instance.k3s.public_ip}" : "Use Session Manager port forwarding"
 }
