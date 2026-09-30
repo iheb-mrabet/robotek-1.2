@@ -16,6 +16,7 @@ ENV ROS_DISTRO=${ROS_DISTRO} \
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         bash-completion \
         ca-certificates \

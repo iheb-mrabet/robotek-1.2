@@ -1,0 +1,26 @@
+{{- if .Values.argocdMetrics.enabled }}
+{{- range $component := list "application-controller" "server" "repo-server" "applicationset-controller" "notifications-controller" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: robotek-argocd-{{ $component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $.Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ $.Values.argocdMetrics.namespace | quote }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ if or (eq $component "repo-server") (eq $component "server") }}{{ printf "argocd-%s-metrics" $component | quote }}{{ else }}"argocd-metrics"{{ end }}
+      app.kubernetes.io/component: {{ $component | quote }}
+      app.kubernetes.io/instance: {{ $.Values.argocdMetrics.release | quote }}
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /metrics
+{{- end }}
+{{- end }}

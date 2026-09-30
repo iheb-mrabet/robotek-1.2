@@ -40,7 +40,7 @@ spec:
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           envFrom:
             - secretRef:
-                name: robotek-demo-database
+                name: {{ .Values.database.existingSecret }}
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata

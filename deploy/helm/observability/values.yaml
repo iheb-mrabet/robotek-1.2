@@ -2,3 +2,8 @@
 # Environment-specific settings belong in values-staging.yaml.
 
 monitoring: {}
+
+argocdMetrics:
+  enabled: true
+  namespace: argocd
+  release: argocd

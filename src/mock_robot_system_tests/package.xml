@@ -17,6 +17,7 @@
   <exec_depend>mock_robot_interfaces</exec_depend>
   <exec_depend>rclpy</exec_depend>
 
+  <test_depend>action_msgs</test_depend>
   <test_depend>geometry_msgs</test_depend>
   <test_depend>mock_robot_interfaces</test_depend>
   <test_depend>nav_msgs</test_depend>

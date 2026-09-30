@@ -27,3 +27,15 @@ reports/
 
 .venv/
 reports/delivery/
+
+# Terraform and local infrastructure material
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+backend.hcl
+*.pem
+*.key
+rebuild-evidence/

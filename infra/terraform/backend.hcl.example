@@ -1,0 +1,7 @@
+# Stable accounts only. Do not use this backend inside an Academy account that
+# can disappear. Create the bucket separately with encryption and versioning.
+bucket       = "replace-with-private-state-bucket"
+key          = "robotek/staging/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

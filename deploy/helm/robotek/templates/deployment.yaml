@@ -192,6 +192,11 @@ spec:
 
             - name: exporter-home
               mountPath: /home/robot
+
+            {{- if .Values.sharedMemory.enabled }}
+            - name: shared-memory
+              mountPath: /dev/shm
+            {{- end }}
         {{- end }}
 
       volumes:

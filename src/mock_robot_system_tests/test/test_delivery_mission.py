@@ -1,9 +1,11 @@
 import time
+import unittest
 
 import launch
 import launch_testing
 import pytest
 import rclpy
+from action_msgs.msg import GoalStatus
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
@@ -27,8 +29,8 @@ def generate_test_description():
     return launch.LaunchDescription([full_simulation, launch_testing.actions.ReadyToTest()])
 
 
-class TestDeliveryMission:
-    def test_nearby_delivery_mission_reaches_reported_final_state(self) -> None:
+class TestDeliveryMission(unittest.TestCase):
+    def test_nearby_delivery_mission_completes_successfully(self) -> None:
         rclpy.init()
         node = rclpy.create_node("delivery_mission_probe")
         try:
@@ -50,8 +52,11 @@ class TestDeliveryMission:
                 rclpy.spin_once(node, timeout_sec=0.2)
 
             assert result_future.done(), "Delivery action did not finish before timeout."
-            result = result_future.result().result
-            assert result.final_state in {"COMPLETED", "FAILED", "EMERGENCY_STOPPED"}
+            response = result_future.result()
+            result = response.result
+            assert response.status == GoalStatus.STATUS_SUCCEEDED, result.message
+            assert result.success, result.message
+            assert result.final_state == "COMPLETED", result.message
             assert result.message
         finally:
             node.destroy_node()
