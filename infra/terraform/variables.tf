@@ -65,6 +65,34 @@ variable "enable_ssh" {
   default     = true
 }
 
+variable "enable_public_dashboard" {
+  description = "Allocate a stable Elastic IP and publish the Robotek dashboard over trusted HTTPS."
+  type        = bool
+  default     = true
+}
+
+variable "caddy_version" {
+  description = "Pinned Caddy release used for the permanent HTTPS endpoint."
+  type        = string
+  default     = "v2.11.4"
+
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+$", var.caddy_version))
+    error_message = "caddy_version must be a full semantic version prefixed with v."
+  }
+}
+
+variable "caddy_sha512" {
+  description = "Official SHA-512 digest for the pinned linux_amd64 Caddy archive."
+  type        = string
+  default     = "8220d1f013b6f27510247b2360c9e0ca9f018feebd82515f07635318b34ff9777ccc8fd0b6e6f2486ce3a33fe389fbb7db12d05baa474f4587509fb4f5ebf1c9"
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{128}$", var.caddy_sha512))
+    error_message = "caddy_sha512 must be a lowercase SHA-512 digest."
+  }
+}
+
 variable "admin_cidr" {
   description = "Current operator public IPv4 as a /32. Never use 0.0.0.0/0."
   type        = string
