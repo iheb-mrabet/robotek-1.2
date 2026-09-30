@@ -84,7 +84,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && PIP_PKG_RESOURCES="${PIP_VENDOR_DIR}/pkg_resources/__init__.py" \
     && PIP_PKG_RESOURCES="${PIP_PKG_RESOURCES}" VENDOR_DIR="${VENDOR_DIR}" /opt/ci-venv/bin/python -c 'import os, pathlib; path = pathlib.Path(os.environ["PIP_PKG_RESOURCES"]); text = path.read_text(); old = "os.path.join(os.path.dirname(os.path.dirname(__file__)), '\''setuptools'\'', '\''_vendor'\'')"; new = repr(os.environ["VENDOR_DIR"]); assert text.count(old) == 1; path.write_text(text.replace(old, new))' \
     && PIP_VENDOR_MANIFEST="${PIP_VENDOR_DIR}/vendor.txt" \
-    && PIP_VENDOR_MANIFEST="${PIP_VENDOR_MANIFEST}" /opt/ci-venv/bin/python -c 'import os, pathlib, re; path = pathlib.Path(os.environ["PIP_VENDOR_MANIFEST"]); text, count = re.subn(r"(?m)^urllib3==[^\s]+$", "urllib3==2.8.0", path.read_text()); assert count == 1; path.write_text(text)' \
+    && PIP_VENDOR_MANIFEST="${PIP_VENDOR_MANIFEST}" /opt/ci-venv/bin/python -c 'import os, pathlib, re; path = pathlib.Path(os.environ["PIP_VENDOR_MANIFEST"]); text, count = re.subn(r"(?m)^(\s*)urllib3==[^\s]+$", r"\g<1>urllib3==2.8.0", path.read_text()); assert count == 1; path.write_text(text)' \
     && PIP_BOM="${PIP_VENDOR_DIR}/bom.cdx.json" \
     && PIP_BOM="${PIP_BOM}" /opt/ci-venv/bin/python -c 'import json, os, pathlib; path = pathlib.Path(os.environ["PIP_BOM"]); data = json.loads(path.read_text()); fixes = {"msgpack": "1.2.1", "setuptools": "78.1.1", "urllib3": "2.8.0"}; [component.update({"version": fixes[component["name"]], "purl": "pkg:pypi/" + component["name"] + "@" + fixes[component["name"]]}) for component in data["components"] if component["name"] in fixes]; path.write_text(json.dumps(data, indent=2) + "\n")' \
     && PATCH_DIR="$(mktemp -d)" \
