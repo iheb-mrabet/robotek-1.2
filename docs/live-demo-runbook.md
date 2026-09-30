@@ -6,7 +6,7 @@ This runbook keeps the presentation short, repeatable, and backed by real deploy
 
 - AWS K3s, Argo CD, and the self-hosted GitHub runner are online.
 - Docker Hub has public frontend, backend, and database repositories under `ihebmrabet`.
-- `Robotek Live Demo` publishes a verified temporary HTTPS URL after a successful deployment.
+- `Robotek Live Demo` verifies the permanent HTTPS URL after a successful deployment.
 - The open feature branch `demo-feature/live-safety-gate` contains the pre-written feature and stays unmerged until the meeting.
 - The dashboard uses only live ROS 2, Prometheus, Kubernetes, Argo CD, Grafana, and PostgreSQL results. Missing sources display `Unavailable`.
 
@@ -14,13 +14,18 @@ This runbook keeps the presentation short, repeatable, and backed by real deploy
 
 Open these tabs in order:
 
-1. The HTTPS dashboard URL from the newest successful `Publish temporary HTTPS interface` summary.
+1. The permanent dashboard: <https://18-211-80-86.nip.io>.
 2. The prepared safety-gate pull request.
 3. GitHub Actions filtered to `Robotek Live Demo`.
 4. The three Docker Hub repositories.
 5. Argo CD with `robotek-demo` selected.
 
 Run one private rehearsal before the meeting. Confirm the dashboard refreshes, the feature is mergeable, the runner is online, and the latest workflow is green.
+
+The permanent endpoint uses an AWS Elastic IP and Caddy automatic HTTPS. It survives
+instance stop/start cycles while the Elastic IP remains associated. If the AWS Academy
+account is reset or deleted, rebuild with Terraform and update this runbook and the
+workflow URL to the new `public_dashboard_url` output.
 
 ## Live timeline
 
@@ -60,5 +65,6 @@ Summarize: Git push → tests → three Docker images → Helm desired state →
 
 - Refresh a stale page instead of restarting a successful pipeline.
 - If Docker Hub is slow to list a tag, show the successful build job and refresh once after deployment.
-- If the temporary hostname changes, use the URL in the latest public-interface job summary.
+- If the public endpoint fails, verify the Elastic IP association, `caddy.service`, and
+  the latest `Verify permanent HTTPS interface` job before the meeting.
 - If the feature branch is behind `main`, update it and rehearse before the meeting; do not improvise a conflict resolution during the call.
