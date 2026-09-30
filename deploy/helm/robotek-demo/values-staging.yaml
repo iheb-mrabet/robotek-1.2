@@ -1,13 +1,13 @@
 images:
   frontend:
     repository: ihebmrabet/robotek-demo-frontend
-    tag: f1fe3a4d1975429fee4174b015d1745c4a077a84
+    tag: 1db9e00111b0793be2b5309c7bce819664a22399
   backend:
     repository: ihebmrabet/robotek-demo-backend
-    tag: f1fe3a4d1975429fee4174b015d1745c4a077a84
+    tag: 1db9e00111b0793be2b5309c7bce819664a22399
   database:
     repository: ihebmrabet/robotek-demo-database
-    tag: f1fe3a4d1975429fee4174b015d1745c4a077a84
+    tag: 1db9e00111b0793be2b5309c7bce819664a22399
 
 imagePullPolicy: Always
 
