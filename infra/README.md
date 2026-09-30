@@ -5,7 +5,8 @@ instance IDs, IP addresses, credentials, private keys, or Terraform state.
 
 ## Ownership boundaries
 
-- Terraform owns the VPC, public subnet, route, security group, key pair, and EC2 host.
+- Terraform owns the VPC, public subnet, route, security group, key pair, EC2 host,
+  and dashboard Elastic IP.
 - Cloud-init and `infra/scripts` own K3s, Helm, Argo CD, and bootstrap-time Secrets.
 - Argo CD owns Robotek, the demo stack, monitoring, dashboards, alerts, and Falco.
 
@@ -32,6 +33,24 @@ export ROBOTEC_HOST="$(terraform -chdir=infra/terraform output -raw public_ip)"
 export ROBOTEC_SSH_KEY=/absolute/path/to/private-key
 make platform-bootstrap
 make platform-verify
+```
+
+The stable dashboard URL is printed by:
+
+```bash
+terraform -chdir=infra/terraform output -raw public_dashboard_url
+```
+
+When `enable_public_dashboard=true`, ports 80 and 443 are intentionally public.
+Caddy is installed from a pinned, SHA-512-verified release and runs as a restricted
+systemd service. The hostname is derived from the Elastic IP through `nip.io`, so no
+registrar or mutable DNS record is required.
+
+For the already-running staging environment, import the existing address before the
+first Terraform apply so Terraform does not allocate a second one:
+
+```bash
+terraform -chdir=infra/terraform import 'aws_eip.dashboard[0]' eipalloc-02fd54fd6a22fda18
 ```
 
 Register the runner only after generating a fresh one-time repository token and
