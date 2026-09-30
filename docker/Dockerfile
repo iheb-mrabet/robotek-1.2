@@ -50,7 +50,8 @@ RUN python3 -m pip install \
         --upgrade \
         "setuptools==78.1.1" \
         "msgpack==1.2.1" \
-    && python3 -c 'import importlib.metadata as m; assert m.version("setuptools") == "78.1.1"; assert m.version("msgpack") == "1.2.1"'
+        "urllib3==2.8.0" \
+    && python3 -c 'import importlib.metadata as m; assert m.version("setuptools") == "78.1.1"; assert m.version("msgpack") == "1.2.1"; assert m.version("urllib3") == "2.8.0"'
 
 RUN python3 -m venv --system-site-packages /opt/ci-venv \
     && /opt/ci-venv/bin/python -m pip install \
@@ -59,6 +60,7 @@ RUN python3 -m venv --system-site-packages /opt/ci-venv \
         "pip==26.2.1" \
         "setuptools==78.1.1" \
         "msgpack==1.2.1" \
+        "urllib3==2.8.0" \
     && /opt/ci-venv/bin/python -m pip install \
         --no-cache-dir \
         pytest-cov==7.1.0 \
