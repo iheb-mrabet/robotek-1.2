@@ -46,6 +46,12 @@ Caddy is installed from a pinned, SHA-512-verified release and runs as a restric
 systemd service. The hostname is derived from the Elastic IP through `nip.io`, so no
 registrar or mutable DNS record is required.
 
+The address is stable only while the Elastic IP remains allocated and
+associated. AWS Academy can stop EC2 when the lab session ends, and its account
+can be reset or disabled when the course or budget ends. This environment
+cannot guarantee 24/7 availability; start the lab and validate the full stack
+before every demo. Do not describe the URL as an always-on production service.
+
 For the already-running staging environment, import the existing address before the
 first Terraform apply so Terraform does not allocate a second one:
 
@@ -62,6 +68,14 @@ export GITHUB_RUNNER_SHA256='official archive checksum'
 make runner-register
 unset GITHUB_RUNNER_TOKEN GITHUB_RUNNER_SHA256
 ```
+
+The GitHub deployment job requires an online repository runner labeled
+`self-hosted`, `linux`, `x64`, `robotek-staging`, `k3s`, and `staging`. Check
+**Settings → Actions → Runners** before triggering or rerunning a deployment.
+If no runner is configured, a successful image build or GitOps promotion is
+not proof that the live release deployed; the Argo job can remain queued until
+GitHub cancels it. Registering a runner requires a fresh one-time GitHub token
+and an active lab/EC2 instance. Never paste the token into chat or logs.
 
 Do not put secrets in this repository, Terraform variables, Terraform state, or
 chat. Bootstrap generates PostgreSQL and Grafana credentials directly in K3s.
