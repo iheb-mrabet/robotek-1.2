@@ -77,6 +77,20 @@ not proof that the live release deployed; the Argo job can remain queued until
 GitHub cancels it. Registering a runner requires a fresh one-time GitHub token
 and an active lab/EC2 instance. Never paste the token into chat or logs.
 
+The runner's Kubernetes credential is read-only in the Robotek staging and
+demo namespaces and expires after eight hours. On each new lab session, after
+the instance is running and the current repository revision is installed on
+the host, refresh it without creating another GitHub registration token:
+
+```bash
+sudo /opt/robotek/repository/infra/scripts/register-runner.sh --refresh-kubeconfig
+```
+
+Then confirm the runner is online in GitHub and that `kubectl` can read the
+Robotek and Argo CD resources as the `robotek-runner` user. An expired cluster
+credential can leave a registered runner online while deployment validation
+fails; renewing only the GitHub registration token does not fix that state.
+
 Do not put secrets in this repository, Terraform variables, Terraform state, or
 chat. Bootstrap generates PostgreSQL and Grafana credentials directly in K3s.
 Telegram routing stays disabled until the exposed historical identifier and bot
