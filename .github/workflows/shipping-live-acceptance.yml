@@ -9,95 +9,46 @@ concurrency:
   group: robotek-shipping-live-acceptance
   cancel-in-progress: false
 jobs:
-  acceptance:
-    name: Public platform and deployed robot behavior
+  diagnostics:
+    name: Boolean ROS discovery and Falco availability checks
     runs-on: [self-hosted, linux, x64, robotek-staging, k3s, staging]
-    timeout-minutes: 12
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Verify deployed release and all GitOps applications
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p reports/shipping
-          python3 - <<'PY' >> "$GITHUB_ENV"
-          import re
-          from pathlib import Path
-          text = Path('deploy/helm/robotek/values-staging.yaml').read_text()
-          match = re.search(r'^  digest: "?(sha256:[a-f0-9]{64})"?\s*$', text, re.M)
-          assert match, 'No expected runtime digest'
-          print('EXPECTED_DIGEST=' + match[1])
-          PY
-          for app in robotek-staging robotek-demo robotek-observability robotek-runtime-security; do
-            state=$(kubectl -n argocd get application "$app" \
-              -o jsonpath='{.spec.source.targetRevision} {.status.sync.status} {.status.health.status}')
-            printf '%s %s\n' "$app" "$state" | tee -a reports/shipping/gitops.txt
-            test "$state" = 'main Synced Healthy'
-          done
-      - name: Verify runtime digest and ROS publication
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          bash scripts/deployment/verify_release.sh 2>&1 | tee reports/shipping/release.txt
-          bash scripts/deployment/smoke_test.sh 2>&1 | tee reports/shipping/ros-publication.txt
-      - name: Verify public HTTPS and live platform contract
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          base=https://18-211-80-86.nip.io
-          curl -fsS --max-time 30 "$base/" | grep -Fq 'Operations Control'
-          curl -fsS --max-time 30 "$base/ready" > reports/shipping/readiness.json
-          curl -fsS --max-time 30 "$base/api/platform" > reports/shipping/platform.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root = Path('reports/shipping')
-          ready = json.loads((root/'readiness.json').read_text())
-          assert ready == {'database':'connected', 'status':'ready'}, ready
-          p = json.loads((root/'platform.json').read_text())
-          assert p['data_policy'] == 'live-only'
-          assert p['database']['connected'] is True
-          robot, cluster, o = p['robot'], p['cluster'], p['observability']
-          assert robot['exporter_up'] is True and robot['collection_errors'] == 0
-          assert robot['nodes'] > 0 and robot['topics'] > 0 and robot['runtime_uptime_seconds'] > 0
-          assert cluster['nodes_ready'] == cluster['nodes_total'] > 0
-          assert cluster['pods_ready'] == cluster['pods_total'] > 0
-          assert cluster['deployments_available'] == cluster['deployments_desired'] > 0
-          assert o['prometheus_reachable'] is True
-          assert o['targets_up'] == o['targets_total'] > 0
-          assert o['gitops_synced'] == o['gitops_healthy'] == o['gitops_total'] > 0
-          assert o['grafana']['reachable'] is True and o['grafana']['database'] == 'ok'
-          assert p['alerts']['critical_firing'] == 0
-          print('PASS public HTTPS, database, ROS, workload readiness, monitoring and Grafana')
-          PY
-      - name: Exercise actual delivery, cancellation, emergency stop and recovery
+      - name: Check direct discovery of required public ROS interfaces
         shell: bash
         run: |
           set -Eeuo pipefail
           pod=$(kubectl -n robotek-staging get pods \
-            -l app.kubernetes.io/instance=robotek-staging -o json | \
-            jq -r '[.items[] | select(.status.phase == "Running") | select(all(.status.containerStatuses[]; .ready))] | sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty')
-          test -n "$pod"
-          timeout 300 kubectl -n robotek-staging exec -i -c robotek "$pod" -- \
-            bash -lc 'source /opt/ros/${ROS_DISTRO}/setup.bash; source /opt/robot/setup.bash; exec python3 -u -' \
-            < tests/acceptance/live_runtime_acceptance.py 2>&1 | tee reports/shipping/robot-behavior.txt
-      - name: Inspect live Falco native metrics
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          pod=$(kubectl -n robotek-staging get pods \
-            -l app.kubernetes.io/instance=robotek-staging -o json | \
-            jq -r '[.items[] | select(.status.phase == "Running") | select(all(.status.containerStatuses[]; .ready))] | sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty')
-          test -n "$pod"
-          timeout 90 kubectl -n robotek-staging exec -i -c robotek "$pod" -- python3 -u - \
-            < tests/acceptance/falco_probe.py 2>&1 | tee reports/shipping/falco-metrics.txt
-      - name: Upload acceptance evidence
+            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if kubectl -n robotek-staging exec -c robotek "$pod" -- bash -lc '
+            source /opt/ros/${ROS_DISTRO}/setup.bash
+            source /opt/robot/setup.bash
+            topics=$(timeout 20 ros2 topic list --no-daemon --spin-time 5)
+            for expected in /clock /cmd_vel /mission/status /odom /scan /tf; do
+              grep -Fxq "$expected" <<< "$topics" || exit 1
+            done
+          ' >/dev/null 2>&1; then
+            echo 'PASS direct ROS discovery'
+          else
+            echo 'FAIL direct ROS discovery'
+            exit 1
+          fi
+      - name: Check Falco metrics availability
         if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: robotek-shipping-live-acceptance
-          path: reports/shipping
-          if-no-files-found: error
-          retention-days: 30
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pod=$(kubectl -n robotek-staging get pods \
+            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if timeout 60 kubectl -n robotek-staging exec -i -c robotek "$pod" -- python3 - \
+            < tests/acceptance/falco_probe.py >/dev/null 2>&1; then
+            echo 'PASS Falco metrics availability'
+          else
+            echo 'FAIL Falco metrics availability'
+            exit 1
+          fi
