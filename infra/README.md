@@ -77,10 +77,15 @@ not proof that the live release deployed; the Argo job can remain queued until
 GitHub cancels it. Registering a runner requires a fresh one-time GitHub token
 and an active lab/EC2 instance. Never paste the token into chat or logs.
 
-The runner's Kubernetes credential is read-only in the Robotek staging and
-demo namespaces and expires after eight hours. On each new lab session, after
-the instance is running and the current repository revision is installed on
-the host, refresh it without creating another GitHub registration token:
+The runner's Kubernetes credential permits resource reads in Robotek staging,
+demo, and Argo CD, plus pod exec in staging for ROS smoke tests. It expires
+after eight hours. The runner service explicitly selects this restricted
+kubeconfig instead of K3s's default admin config. The installer enables
+`robotek-runner-kubeconfig.timer` to renew it hourly and after boot, with retries
+while K3s starts. The root-owned helper atomically replaces the runner's
+restricted kubeconfig; it does not give the runner the admin kubeconfig.
+For an existing runner, install or repair renewal using the current script
+without creating another GitHub registration token:
 
 ```bash
 sudo /opt/robotek/repository/infra/scripts/register-runner.sh --refresh-kubeconfig
