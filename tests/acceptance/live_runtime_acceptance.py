@@ -131,6 +131,7 @@ def stationary():
     )
 
 
+stage = "DISCOVERY"
 try:
     assert client.wait_for_server(timeout_sec=15)
     assert stop.wait_for_service(timeout_sec=15)
@@ -140,10 +141,12 @@ try:
     print("START actual odometry", positions[-1], flush=True)
     if math.hypot(*positions[-1]) > 0.2:
         complete(0)
+    stage = "DELIVERY"
     complete(0.8)
 
     feedback.clear()
     commands.clear()
+    stage = "CANCELLATION"
     handle = goal(1.8)
     assert handle.accepted
     until(lambda: bool(feedback), 15)
@@ -155,10 +158,12 @@ try:
     assert response.status == GoalStatus.STATUS_CANCELED
     assert not response.result.success and "canceled" in response.result.message
     print("PASS cancellation", response.result, flush=True)
+    stage = "CANCEL_STATIONARY"
     stationary()
 
     feedback.clear()
     commands.clear()
+    stage = "EMERGENCY_STOP"
     handle = goal(0)
     assert handle.accepted
     until(lambda: bool(feedback), 15)
@@ -170,15 +175,33 @@ try:
     assert not response.result.success and response.result.message
     assert not goal(0).accepted
     print("PASS active emergency-stop interruption", response.result, flush=True)
+    stage = "EMERGENCY_STATIONARY"
     stationary()
     set_stop(False)
+    stage = "RELEASE_STATIONARY"
     stationary()
+    stage = "RETURN_DELIVERY"
     complete(0)
+    stage = "INPUT_REJECTION"
     assert not goal(8, 8).accepted
     assert not goal(float("nan")).accepted
     print("PASS invalid and non-finite destinations rejected", flush=True)
     print("PASS DEPLOYED ROBOTEK LIVE ACCEPTANCE", flush=True)
-except BaseException:
+except BaseException as error:
+    reasons = {
+        "Live ROS acceptance deadline exceeded": "ROS_DEADLINE",
+        "Reachable delivery rejected": "REACHABLE_REJECTED",
+        "No live navigation feedback": "MISSING_FEEDBACK",
+        "Odometry stopped publishing during stop verification": "STALE_ODOMETRY",
+        "Interrupted robot did not settle in simulation within 5s": "SETTLE_TIMEOUT",
+        "No fresh odometry during stationary observation": "STALE_ODOMETRY",
+        "No velocity heartbeat during stationary observation": "MISSING_HEARTBEAT",
+        "Interrupted robot still moving:": "STATIONARY_DRIFT",
+        "Non-zero command published after interruption:": "NONZERO_COMMAND",
+        "Concurrent mission was accepted": "CONCURRENT_ACCEPTED",
+    }
+    reason = next((code for prefix, code in reasons.items() if str(error).startswith(prefix)), "ASSERTION")
+    print(f"ROBOTEK_ACCEPTANCE_FAILURE stage={stage} reason={reason}", flush=True)
     if stop.service_is_ready():
         set_stop(True)
         spin_for(1)
