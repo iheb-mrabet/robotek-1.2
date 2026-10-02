@@ -1,3 +1,12 @@
+data "aws_ec2_managed_prefix_list" "instance_connect" {
+  count = var.enable_ssh ? 1 : 0
+
+  filter {
+    name   = "prefix-list-name"
+    values = ["com.amazonaws.${var.aws_region}.ec2-instance-connect"]
+  }
+}
+
 resource "aws_security_group" "k3s" {
   name_prefix = "${local.name}-"
   description = "Robotek administration only; application UIs stay behind a tunnel"
@@ -11,6 +20,17 @@ resource "aws_security_group" "k3s" {
       from_port   = 22
       to_port     = 22
       cidr_blocks = [var.admin_cidr]
+    }
+  }
+
+  dynamic "ingress" {
+    for_each = var.enable_ssh ? [1] : []
+    content {
+      description     = "SSH from the regional EC2 Instance Connect service"
+      protocol        = "tcp"
+      from_port       = 22
+      to_port         = 22
+      prefix_list_ids = [data.aws_ec2_managed_prefix_list.instance_connect[0].id]
     }
   }
 
