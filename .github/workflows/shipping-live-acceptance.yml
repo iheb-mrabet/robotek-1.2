@@ -76,7 +76,8 @@ jobs:
             -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
           if timeout 300 kubectl -n robotek-staging exec -i -c robotek "$pod" -- \
             bash -lc 'source /opt/ros/${ROS_DISTRO}/setup.bash; source /opt/robot/setup.bash; exec python3 -u -' \
-            < tests/acceptance/live_runtime_acceptance.py >/dev/null 2>&1; then
+            < tests/acceptance/live_runtime_acceptance.py 2>/dev/null | \
+            awk '/^ROBOTEK_ACCEPTANCE_FAILURE stage=/{print}'; then
             echo 'PASS delivery cancellation emergency stop recovery and input rejection'
           else
             echo 'FAIL deployed robot behavior'
