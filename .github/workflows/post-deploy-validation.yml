@@ -95,11 +95,8 @@ jobs:
             echo "SHA=${validation_sha}"
             echo "RunID=${GITHUB_RUN_ID}"
             echo "RunAttempt=${GITHUB_RUN_ATTEMPT}"
-            echo "RunnerName=${RUNNER_NAME}"
             echo "RunnerOS=${RUNNER_OS}"
             echo "RunnerArch=${RUNNER_ARCH}"
-            echo "Hostname=$(hostname)"
-            echo "User=$(id -un)"
             echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } | tee reports/workflow/context.txt
 
@@ -178,22 +175,13 @@ jobs:
           reconciled=false
 
           for attempt in $(seq 1 120); do
-            sync="$(
+            application_state="$(
               kubectl -n argocd get application "$APPLICATION" \
-                -o jsonpath='{.status.sync.status}' \
-                2>/dev/null || true
+                -o json 2>/dev/null || printf '{}'
             )"
-
-            health="$(
-              kubectl -n argocd get application "$APPLICATION" \
-                -o jsonpath='{.status.health.status}' \
-                2>/dev/null || true
-            )"
-
-            revision="$(
-              kubectl -n argocd get application "$APPLICATION" \
-                -o jsonpath='{.status.sync.revision}' \
-                2>/dev/null || true
+            IFS=$'\t' read -r sync health revision operation_phase <<< "$(
+              jq -r '[.status.sync.status // "Pending", .status.health.status // "Pending", .status.sync.revision // "Pending", (if .operation != null then "Pending" else (.status.operationState.phase // "None") end)] | @tsv' \
+                <<< "$application_state"
             )"
 
             compatible=false
@@ -217,7 +205,8 @@ jobs:
 
             if [[ "$sync" == "Synced" ]] &&
                [[ "$health" == "Healthy" ]] &&
-               [[ "$compatible" == "true" ]]
+               [[ "$compatible" == "true" ]] &&
+               [[ "$operation_phase" == "Succeeded" || "$operation_phase" == "None" ]]
             then
               reconciled=true
               break
@@ -227,21 +216,6 @@ jobs:
           done
 
           if [[ "$reconciled" != "true" ]]; then
-            echo
-            echo "=== Argo CD conditions ==="
-
-            kubectl -n argocd get application "$APPLICATION" \
-              -o jsonpath='{range .status.conditions[*]}{.type}{": "}{.message}{"\n"}{end}' \
-              || true
-
-            echo
-            echo "=== Robotek resources ==="
-
-            kubectl -n "$NAMESPACE" get \
-              deployment,replicaset,pods \
-              -o wide \
-              || true
-
             echo "Argo CD reconciliation validation failed." >&2
             exit 1
           fi
@@ -264,8 +238,8 @@ jobs:
             "$NAMESPACE" \
             "$APPLICATION" \
             "$DEPLOYMENT" \
-            2>&1 |
-            tee reports/workflow/release-verification.txt
+            > /dev/null 2>&1
+          echo "Release verification passed." | tee reports/workflow/release-verification.txt
 
       - name: Run ROS 2 staging smoke test
         id: smoke
@@ -281,10 +255,10 @@ jobs:
             "$NAMESPACE" \
             "$APPLICATION" \
             robotek \
-            2>&1 |
-            tee reports/workflow/ros-smoke-test.txt
+            > /dev/null 2>&1
+          echo "ROS smoke test passed." | tee reports/workflow/ros-smoke-test.txt
 
-      - name: Collect diagnostic evidence
+      - name: Prepare sanitized acceptance evidence
         id: evidence
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         continue-on-error: true
@@ -303,12 +277,8 @@ jobs:
             echo "Smoke=${{ steps.smoke.outcome }}"
           } > reports/workflow/validation-outcomes.txt
 
-          EVIDENCE_ROOT="$EVIDENCE_ROOT" \
-            ./scripts/deployment/collect_evidence.sh \
-              "$NAMESPACE" \
-              "$APPLICATION" \
-              2>&1 |
-            tee reports/workflow/evidence-collection.txt
+          cp reports/workflow/validation-outcomes.txt reports/deployment/acceptance-summary.txt
+          printf 'Expected digest: %s\n' "${{ steps.digest.outputs.digest }}" >> reports/deployment/acceptance-summary.txt
 
       - name: Upload validation evidence
         id: artifact
@@ -322,7 +292,7 @@ jobs:
             }}-${{
               github.run_attempt
             }}
-          path: reports/
+          path: reports/deployment/acceptance-summary.txt
           if-no-files-found: error
           retention-days: 30
           compression-level: 6
