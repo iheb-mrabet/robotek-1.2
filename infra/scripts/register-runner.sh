@@ -60,6 +60,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
   - apiGroups: ["apps"]
     resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "watch"]
@@ -203,5 +206,14 @@ fi
 if [[ ! -f "${RUNNER_HOME}/.service" ]]; then
   "${RUNNER_HOME}/svc.sh" install "${RUNNER_USER}"
 fi
-"${RUNNER_HOME}/svc.sh" start
+# K3s kubectl defaults to its admin config unless KUBECONFIG is explicit.
+runner_service="$(cat "${RUNNER_HOME}/.service")"
+[[ "${runner_service}" == actions.runner.*.service && "${runner_service}" != */* ]]
+install -d -o root -g root -m 0755 "/etc/systemd/system/${runner_service}.d"
+cat > "/etc/systemd/system/${runner_service}.d/robotek-kubeconfig.conf" <<'ENVIRONMENT'
+[Service]
+Environment=KUBECONFIG=/home/robotek-runner/.kube/config
+ENVIRONMENT
+systemctl daemon-reload
+systemctl restart "${runner_service}"
 unset GITHUB_RUNNER_TOKEN
