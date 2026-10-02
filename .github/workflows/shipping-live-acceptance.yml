@@ -12,7 +12,7 @@ jobs:
   diagnostics:
     name: Boolean ROS discovery and Falco availability checks
     runs-on: [self-hosted, linux, x64, robotek-staging, k3s, staging]
-    timeout-minutes: 4
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v6
         with:
@@ -50,5 +50,33 @@ jobs:
             echo 'PASS Falco metrics availability'
           else
             echo 'FAIL Falco metrics availability'
+            exit 1
+          fi
+      - name: Repeat the candidate staging smoke test three times
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for attempt in 1 2 3; do
+            if timeout 110 bash scripts/deployment/smoke_test.sh >/dev/null 2>&1; then
+              echo "PASS repeated staging smoke attempt $attempt"
+            else
+              echo "FAIL repeated staging smoke attempt $attempt"
+              exit 1
+            fi
+          done
+      - name: Verify a fresh benign Falco detection
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pod=$(kubectl -n robotek-staging get pods \
+            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if timeout 180 kubectl -n robotek-staging exec -i -c robotek "$pod" -- python3 - \
+            < tests/acceptance/falco_detection.py >/dev/null 2>&1; then
+            echo 'PASS fresh Falco detection'
+          else
+            echo 'FAIL fresh Falco detection'
             exit 1
           fi
