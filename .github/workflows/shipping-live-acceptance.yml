@@ -83,6 +83,16 @@ jobs:
           timeout 300 kubectl -n robotek-staging exec -i -c robotek "$pod" -- \
             bash -lc 'source /opt/ros/${ROS_DISTRO}/setup.bash; source /opt/robot/setup.bash; exec python3 -u -' \
             < tests/acceptance/live_runtime_acceptance.py 2>&1 | tee reports/shipping/robot-behavior.txt
+      - name: Inspect live Falco native metrics
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pod=$(kubectl -n robotek-staging get pods \
+            -l app.kubernetes.io/instance=robotek-staging -o json | \
+            jq -r '[.items[] | select(.status.phase == "Running") | select(all(.status.containerStatuses[]; .ready))] | sort_by(.metadata.creationTimestamp) | last | .metadata.name // empty')
+          test -n "$pod"
+          timeout 90 kubectl -n robotek-staging exec -i -c robotek "$pod" -- python3 -u - \
+            < tests/acceptance/falco_probe.py 2>&1 | tee reports/shipping/falco-metrics.txt
       - name: Upload acceptance evidence
         if: always()
         uses: actions/upload-artifact@v7
