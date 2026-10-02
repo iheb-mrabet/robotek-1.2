@@ -16,6 +16,8 @@ mkdir -p reports/simulation
 # provide sensor data or consume commands for the next robot world.
 export ROBOTEK_SIMULATION_PARTITION
 ROBOTEK_SIMULATION_PARTITION="robotek-$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
+# Variables below are intentionally expanded in the isolated child shell.
+# shellcheck disable=SC2016
 timeout 180s bash -c '
   status=0
   scenario=0
