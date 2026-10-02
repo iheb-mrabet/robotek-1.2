@@ -5,6 +5,8 @@ on:
     branches:
       - main
     paths-ignore:
+      - README.md
+      - docs/**
       - deploy/helm/robotek/values-staging.yaml
       - deploy/helm/robotek-demo/values-staging.yaml
       - demo/**
