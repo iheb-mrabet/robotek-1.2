@@ -15,7 +15,7 @@ elif [[ "${mode}" != "--refresh-kubeconfig" ]]; then
 fi
 
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-iheb-mrabet/robotek-1.2}"
-GITHUB_RUNNER_VERSION="${GITHUB_RUNNER_VERSION:-2.328.0}"
+GITHUB_RUNNER_VERSION="${GITHUB_RUNNER_VERSION:-2.337.0}"
 RUNNER_LABELS="${RUNNER_LABELS:-robotek-staging,k3s,staging}"
 RUNNER_USER="robotek-runner"
 RUNNER_HOME="/opt/actions-runner"
@@ -130,21 +130,65 @@ roleRef:
   name: github-actions-argocd-reader
 YAML
 
-runner_kubeconfig="/home/${RUNNER_USER}/.kube/config"
-install -d -o "${RUNNER_USER}" -g "${RUNNER_USER}" -m 0700 "$(dirname "${runner_kubeconfig}")"
+# Keep short-lived validation credentials renewed without granting cluster-admin.
+install -d -o root -g root -m 0755 /usr/local/sbin
+cat > /usr/local/sbin/robotek-refresh-runner-kubeconfig <<'REFRESH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+runner_user=robotek-runner
+config_dir=/home/robotek-runner/.kube
+install -d -o "${runner_user}" -g "${runner_user}" -m 0700 "${config_dir}"
+umask 077
+config_tmp="$(mktemp "${config_dir}/config.XXXXXX")"
+trap 'rm -f "${config_tmp}"; unset runner_token' EXIT
 runner_token="$(kubectl -n robotek-staging create token github-actions-staging --duration=8h)"
-kubectl --kubeconfig="${runner_kubeconfig}" config set-cluster robotek-k3s \
+kubectl --kubeconfig="${config_tmp}" config set-cluster robotek-k3s \
   --server=https://127.0.0.1:6443 \
   --certificate-authority=/var/lib/rancher/k3s/server/tls/server-ca.crt \
-  --embed-certs=true
-kubectl --kubeconfig="${runner_kubeconfig}" config set-credentials github-actions-staging \
-  --token="${runner_token}"
-kubectl --kubeconfig="${runner_kubeconfig}" config set-context robotek-staging \
-  --cluster=robotek-k3s --user=github-actions-staging --namespace=robotek-staging
-kubectl --kubeconfig="${runner_kubeconfig}" config use-context robotek-staging
-chown -R "${RUNNER_USER}:${RUNNER_USER}" "/home/${RUNNER_USER}/.kube"
-chmod 0600 "${runner_kubeconfig}"
-unset runner_token
+  --embed-certs=true >/dev/null
+kubectl --kubeconfig="${config_tmp}" config set-credentials github-actions-staging \
+  --token="${runner_token}" >/dev/null
+kubectl --kubeconfig="${config_tmp}" config set-context robotek-staging \
+  --cluster=robotek-k3s --user=github-actions-staging --namespace=robotek-staging >/dev/null
+kubectl --kubeconfig="${config_tmp}" config use-context robotek-staging >/dev/null
+chown "${runner_user}:${runner_user}" "${config_tmp}"
+chmod 0600 "${config_tmp}"
+mv -f "${config_tmp}" "${config_dir}/config"
+REFRESH
+chown root:root /usr/local/sbin/robotek-refresh-runner-kubeconfig
+chmod 0700 /usr/local/sbin/robotek-refresh-runner-kubeconfig
+cat > /etc/systemd/system/robotek-runner-kubeconfig.service <<'SERVICE'
+[Unit]
+Description=Renew Robotek validation runner Kubernetes credentials
+Requires=k3s.service
+After=k3s.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/robotek-refresh-runner-kubeconfig
+Restart=on-failure
+RestartSec=30s
+SERVICE
+cat > /etc/systemd/system/robotek-runner-kubeconfig.timer <<'TIMER'
+[Unit]
+Description=Refresh Robotek validation credentials hourly
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1h
+Unit=robotek-runner-kubeconfig.service
+
+[Install]
+WantedBy=timers.target
+TIMER
+systemctl daemon-reload
+systemctl start robotek-runner-kubeconfig.service
+systemctl enable --now robotek-runner-kubeconfig.timer
+
+# GitHub's configuration and service scripts resolve files from the runner root.
+cd "${RUNNER_HOME}"
 
 if [[ "${mode}" == "--token-stdin" && ! -f "${RUNNER_HOME}/.runner" ]]; then
   sudo -u "${RUNNER_USER}" "${RUNNER_HOME}/config.sh" \
