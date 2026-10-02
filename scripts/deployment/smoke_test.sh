@@ -59,9 +59,8 @@ for attempt in 1 2 3 4 5; do
       -- bash -lc '
         source /opt/ros/${ROS_DISTRO}/setup.bash
         source /opt/robot/setup.bash
-        ros2 daemon stop >/dev/null 2>&1 || true
-        sleep 2
-        ros2 topic list
+        # Discover the live graph directly; CLI daemon caches can be stale.
+        timeout 15 ros2 topic list --no-daemon --spin-time 5
       ' 2>/dev/null || true
   )"
 
