@@ -18,7 +18,8 @@ on:
 
 concurrency:
   group: robotek-staging-post-deploy-validation
-  cancel-in-progress: false
+  # The job waits for a lab-hosted runner. Supersede obsolete queued revisions.
+  cancel-in-progress: true
 
 permissions:
   contents: read
