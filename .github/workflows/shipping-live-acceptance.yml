@@ -38,7 +38,7 @@ jobs:
           done
           echo 'FAIL all four GitOps applications did not become healthy'
           exit 1
-      - name: Verify exact final deployed runtime digest
+      - name: Verify stable complete revision and exact deployed runtime digest
         shell: bash
         run: |
           set -Eeuo pipefail
