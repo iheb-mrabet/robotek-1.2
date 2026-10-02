@@ -42,8 +42,8 @@ If a rollout replaces the pod, select it again and redefine the helper in each t
 ## Show ROS state
 
 ```bash
-rr ros2 node list
-rr ros2 topic list
+rr ros2 node list --no-daemon --spin-time 5
+rr ros2 topic list --no-daemon --spin-time 5
 rr timeout 12 ros2 topic echo /mission/status \
   mock_robot_interfaces/msg/MissionStatus --once --no-daemon
 rr timeout 12 ros2 topic echo /odom nav_msgs/msg/Odometry \
