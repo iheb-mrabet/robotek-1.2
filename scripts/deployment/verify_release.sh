@@ -22,7 +22,7 @@ while (( $(date +%s) < deadline )); do
   fi
   state="$(jq -r '[.status.sync.status // "Pending", .status.health.status // "Pending", .status.sync.revision // "Pending", (if .operation != null then "Pending" else (.status.operationState.phase // "None") end)] | @tsv' <<< "$application_json")"
   IFS=$'\t' read -r sync_status health_status revision operation_phase <<< "$state"
-  if [[ "$sync_status" != Synced || "$health_status" != Healthy ]] || [[ "$operation_phase" != Succeeded && "$operation_phase" != None ]]; then
+  if [[ "$sync_status" != Synced || "$health_status" != Healthy || ! "$revision" =~ ^[a-f0-9]{40}$ ]] || [[ "$operation_phase" != Succeeded && "$operation_phase" != None ]]; then
     sleep 3
     continue
   fi
