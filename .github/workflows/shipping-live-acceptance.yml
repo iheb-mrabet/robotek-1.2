@@ -42,12 +42,14 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if bash scripts/deployment/verify_release.sh >/dev/null 2>&1; then
-            echo 'PASS exact final runtime digest and container readiness'
-          else
-            echo 'FAIL final runtime verification'
-            exit 1
-          fi
+          for attempt in 1 2 3; do
+            if bash scripts/deployment/verify_release.sh >/dev/null 2>&1; then
+              echo "PASS stable exact runtime verification attempt $attempt"
+            else
+              echo "FAIL stable runtime verification attempt $attempt"
+              exit 1
+            fi
+          done
       - name: Repeat live ROS publication checks three times
         shell: bash
         run: |
