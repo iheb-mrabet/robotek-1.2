@@ -131,7 +131,6 @@ jobs:
 
   simulation-tests:
     name: Headless Gazebo tests
-    if: github.event_name != 'pull_request'
     needs: integration-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 35
