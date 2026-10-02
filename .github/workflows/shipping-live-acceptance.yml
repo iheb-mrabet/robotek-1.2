@@ -9,70 +9,80 @@ concurrency:
   group: robotek-shipping-live-acceptance
   cancel-in-progress: false
 jobs:
-  diagnostics:
-    name: Boolean ROS discovery and Falco availability checks
+  acceptance:
+    name: Final AWS shipping acceptance
     runs-on: [self-hosted, linux, x64, robotek-staging, k3s, staging]
-    timeout-minutes: 8
+    timeout-minutes: 10
+    env:
+      EXPECTED_DIGEST: sha256:068bfb5d296a4e4a548415f04432713b8aa8ff308be03a7d5fdeed0064acd2a2
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Check direct discovery of required public ROS interfaces
+      - name: Verify all four applications track main and are healthy
         shell: bash
         run: |
           set -Eeuo pipefail
-          pod=$(kubectl -n robotek-staging get pods \
-            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-          if kubectl -n robotek-staging exec -c robotek "$pod" -- bash -lc '
-            source /opt/ros/${ROS_DISTRO}/setup.bash
-            source /opt/robot/setup.bash
-            topics=$(timeout 20 ros2 topic list --no-daemon --spin-time 5)
-            for expected in /clock /cmd_vel /mission/status /odom /scan /tf; do
-              grep -Fxq "$expected" <<< "$topics" || exit 1
-            done
-          ' >/dev/null 2>&1; then
-            echo 'PASS direct ROS discovery'
-          else
-            echo 'FAIL direct ROS discovery'
-            exit 1
-          fi
-      - name: Check Falco metrics availability
-        if: always()
+          for app in robotek-staging robotek-demo robotek-observability robotek-runtime-security; do
+            state=$(kubectl -n argocd get application "$app" \
+              -o jsonpath='{.spec.source.targetRevision} {.status.sync.status} {.status.health.status}' 2>/dev/null)
+            test "$state" = 'main Synced Healthy'
+          done
+          echo 'PASS all four GitOps applications'
+      - name: Verify exact final deployed runtime digest
         shell: bash
         run: |
           set -Eeuo pipefail
-          pod=$(kubectl -n robotek-staging get pods \
-            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-          if timeout 60 kubectl -n robotek-staging exec -i -c robotek "$pod" -- python3 - \
-            < tests/acceptance/falco_probe.py >/dev/null 2>&1; then
-            echo 'PASS Falco metrics availability'
+          if bash scripts/deployment/verify_release.sh >/dev/null 2>&1; then
+            echo 'PASS exact final runtime digest and container readiness'
           else
-            echo 'FAIL Falco metrics availability'
+            echo 'FAIL final runtime verification'
             exit 1
           fi
-      - name: Repeat the candidate staging smoke test three times
-        if: always()
+      - name: Repeat live ROS publication checks three times
         shell: bash
         run: |
           set -Eeuo pipefail
           for attempt in 1 2 3; do
             if timeout 110 bash scripts/deployment/smoke_test.sh >/dev/null 2>&1; then
-              echo "PASS repeated staging smoke attempt $attempt"
+              echo "PASS live ROS smoke attempt $attempt"
             else
-              echo "FAIL repeated staging smoke attempt $attempt"
+              echo "FAIL live ROS smoke attempt $attempt"
               exit 1
             fi
           done
-      - name: Verify a fresh benign Falco detection
-        if: always()
+      - name: Verify public HTTPS and complete platform contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/acceptance/public_platform.py
+      - name: Verify delivery cancellation emergency stop and recovery
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pod=$(kubectl -n robotek-staging get pods \
+            -l app.kubernetes.io/instance=robotek-staging --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if timeout 300 kubectl -n robotek-staging exec -i -c robotek "$pod" -- \
+            bash -lc 'source /opt/ros/${ROS_DISTRO}/setup.bash; source /opt/robot/setup.bash; exec python3 -u -' \
+            < tests/acceptance/live_runtime_acceptance.py >/dev/null 2>&1; then
+            echo 'PASS delivery cancellation emergency stop recovery and input rejection'
+          else
+            echo 'FAIL deployed robot behavior'
+            exit 1
+          fi
+      - name: Verify fresh Falco detection
         shell: bash
         run: |
           set -Eeuo pipefail
           if timeout 200 python3 tests/acceptance/falco_detection.py >/dev/null 2>&1; then
-            echo 'PASS fresh Falco detection'
+            echo 'PASS fresh Falco terminal-shell detection'
           else
             echo 'FAIL fresh Falco detection'
             exit 1
           fi
+      - name: Recheck platform health after the robot exercise
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/acceptance/public_platform.py
