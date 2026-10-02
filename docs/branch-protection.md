@@ -1,16 +1,16 @@
-# Main branch protection
+# Main branch governance
 
-After the workflows have completed at least once, we create later a ruleset for `main` ( we can't do it now so we just record the steps for later use ):
+Use pull requests and successful review checks for changes to `main`. The shipping documentation cleanup and runner update were reviewed through pull requests with CI, security, and infrastructure checks.
 
-1. Open **Settings → Rules → Rulesets → New branch ruleset**.
-2. Target the default branch `main`.
-3. Require a pull request before merging.
-4. Require approvals and dismiss stale approvals when new commits are pushed.
-5. Require status checks to pass.
-6. Add these required checks:
-   - `Fast gate`
-   - `Unit tests`
-   - `Aggregated security gate`
-7. Require branches to be up to date before merging.
-8. Block force pushes and branch deletion.
+The delivery review on 2 October 2026 found that GitHub does not enforce branch protection on `main`. Review discipline is therefore an operating practice, not an enforced repository guarantee.
 
+Recommended ruleset for a team repository:
+
+1. Target `main`.
+2. Require a pull request and review approval.
+3. Require the relevant CI, security, and infrastructure status checks.
+4. Dismiss stale approvals when code changes.
+5. Block force pushes and branch deletion.
+6. Provide a narrowly scoped exception for the approved GitOps promotion automation, so it can update only the intended image values without disabling the review rules for human changes.
+
+Confirm the exact current check names and automation behavior before enabling a ruleset. Do not enable rules that silently prevent verified image promotion.
