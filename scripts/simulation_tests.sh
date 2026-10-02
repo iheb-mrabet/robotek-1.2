@@ -23,11 +23,11 @@ timeout 180s bash -c '
     scenario=$((scenario + 1))
     test_name="$(basename "$test_file" .py)"
     echo "Simulation scenario: $test_name (isolated domain/partition)"
-    if ROS_DOMAIN_ID=$((70 + scenario)) \\
-      GZ_PARTITION="${ROBOTEK_SIMULATION_PARTITION}-${scenario}" \\
-      python3 -m pytest \\
-        -c src/mock_robot_system_tests/pytest.ini \\
-        "$test_file" \\
+    if ROS_DOMAIN_ID=$((70 + scenario)) \
+      GZ_PARTITION="${ROBOTEK_SIMULATION_PARTITION}-${scenario}" \
+      python3 -m pytest \
+        -c src/mock_robot_system_tests/pytest.ini \
+        "$test_file" \
         --junitxml="reports/simulation/${test_name}.xml"; then
       :
     else
@@ -35,7 +35,7 @@ timeout 180s bash -c '
     fi
   done
   exit "$status"
-' simulation-tier \\
-  src/mock_robot_system_tests/test/test_basic_movement.py \\
-  src/mock_robot_system_tests/test/test_delivery_mission.py \\
+' simulation-tier \
+  src/mock_robot_system_tests/test/test_basic_movement.py \
+  src/mock_robot_system_tests/test/test_delivery_mission.py \
   src/mock_robot_system_tests/test/test_simulation_topics.py
