@@ -40,10 +40,11 @@ flowchart TD
 
 ## Delivery baseline
 
-Acceptance on 2 October 2026 verified the deployed immutable image, expected ROS topics, publishing mission status and odometry, and evidence upload. Recovery checks verified K3s, Caddy, the self-hosted runner, credential renewal, all four Argo CD applications, and public readiness after host restart.
+Acceptance on 3 October 2026 verified the final immutable runtime image, repeated ROS publication, completed delivery, concurrent-goal rejection, cancellation, emergency stop and explicit recovery, invalid destinations, public HTTPS health, and fresh Falco detection. Automated staging validation passed all eight checks. Recovery checks verified K3s, Caddy, the self-hosted runner, hourly credential renewal, all four Argo CD applications, and public database readiness after host restart.
 
-- [Verified runtime release](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/37065740579)
-- [Current staging acceptance](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/37067057208)
+- [Verified runtime release](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/37120123963)
+- [Current staging acceptance](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/37120741854)
+- [Full live behavioral and security acceptance](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/37120833765)
 - [Post-recovery acceptance](https://github.com/iheb-mrabet/robotek-1.2/actions/runs/36987968801)
 
 Use the live dashboard and latest workflow evidence for the current state. A green build, a healthy pod, and a successful behavioral test provide different kinds of evidence.
