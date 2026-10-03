@@ -1,0 +1,89 @@
+name: Robotek Repository Cleanup
+on:
+  push:
+    branches: [audit/shipping-live-acceptance-20261002]
+    paths: [.github/workflows/repository-cleanup.yml]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: robotek-repository-cleanup
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: github.repository == 'iheb-mrabet/robotek-1.2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Retain selected branches and 150 meaningful runs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            if (context.repo.owner !== 'iheb-mrabet' || context.repo.repo !== 'robotek-1.2') throw new Error('Unexpected repository');
+            const repo = {owner: context.repo.owner, repo: context.repo.repo};
+            const expectedBranches = [{"name":"demo-feature/live-safety-gate","sha":"ea1c4699b96fc105a44eaecf9d46829374ed82e2"},{"name":"docs/shipping-handoff-20261002","sha":"bace7a8792170dca5e1dbd2e925395469a2925dd"},{"name":"feat/real-operations-dashboard","sha":"93d4b175d9ddbe507cb951dd9dfae6983c1988ab"},{"name":"fix/backend-health-probes","sha":"10e7f56bebf2245c988611f4680a1a734dc16d19"},{"name":"fix/ci-image-dependencies","sha":"657b1ec11541edb1615aa829644319317e1d293a"},{"name":"fix/demo-concurrency-isolation","sha":"9eb401388943f3684341b8d543ce4ffd63b5e3da"},{"name":"fix/demo-helm-push-trigger","sha":"ac4aa1c24b9a5cc1ddd04bcd10d44fed85253deb"},{"name":"fix/demo-runner-rbac","sha":"157b428bfedfb73580df00802cb392504dcb5f5b"},{"name":"fix/direct-staging-discovery","sha":"ef6dc34333931ee9aef93070b21fb9aa936e79d6"},{"name":"fix/isolate-simulation-scenarios","sha":"6abb52fd2f648d31fc40f65101b77f10b2ac7168"},{"name":"fix/lab-runner-gazebo-20261002","sha":"ad70fd338435415c9177d7770d1f0254674ec2de"},{"name":"fix/lab-session-readiness-20261001","sha":"6d5322aa0158223fd0fd2cb60769ebd44defbd54"},{"name":"fix/live-grafana-endpoint","sha":"f3b7a605c5cf01ad364cc3dcc32d49d7e75c7f0d"},{"name":"fix/permanent-dashboard-20260930","sha":"7ab158bbcb6d67c3caf27ff6d74c436e40456af7"},{"name":"fix/post-deploy-latest-only","sha":"19da97b0d2ca2577105e6aaba11a354df949bc81"},{"name":"fix/post-deploy-release-trigger","sha":"488c00e599ed6c3f7cfa03a26d98f4b75c6d4c36"},{"name":"fix/robotek-instance-connect","sha":"40a759679700df905da4b7e855ff29498ac83167"},{"name":"fix/runner-service-credential-renewal","sha":"7b271a2ab9ef5fb0f7a9f64e0f491e5c31350529"},{"name":"fix/stable-deployment-acceptance","sha":"aea52d94d75179ca0f8a4984b685786d0709172d"},{"name":"fix/staging-smoke-pod-selection","sha":"bf3b534467833f9a728662d04fddbc8e16200acf"},{"name":"fix/system-test-discovery","sha":"b87d3cc2c82ce8c8dcbc73bd030ac0b38d2f7427"},{"name":"fix/system-test-selection","sha":"de7e5191f68e8a2b0da001acb912537fc1b300b5"},{"name":"fix/verified-live-telemetry","sha":"36ca0cf82c35f4da0940d519d7cbd8d4bbb935ed"},{"name":"master","sha":"a5414681f1673f9929b7d608f0965df59c76f7d9"}];
+            const keptBranches = ["main","audit/shipping-live-acceptance-20261002","rebuild/aws-portable-infra","demo-preparation","demo-feature/live-safety-gate-v2","feat/real-live-dashboard"];
+            const pins = new Set([37120123963,37078810941,37078601699,37078601698,37077451859,37075914047,37075810126,37075236174,37075236172,37073870896,37072724063,37072152172,37072152171,37067057208,37065740579,36987968801]);
+            pins.add(context.runId);
+            const pause = () => new Promise(resolve => setTimeout(resolve, 1100));
+            const openPRs = await github.paginate(github.rest.pulls.list, {...repo,state:'open',per_page:100});
+            const protectedHeads = new Set(openPRs.map(pr => pr.head.ref));
+            let deletedBranches = 0;
+            for (const branch of expectedBranches) {
+              if (keptBranches.includes(branch.name) || protectedHeads.has(branch.name)) throw new Error('Branch protection guard');
+              let current;
+              try { current = (await github.rest.git.getRef({...repo,ref:'heads/'+branch.name})).data; }
+              catch (error) { if (error.status === 404) continue; throw error; }
+              if (current.object.sha !== branch.sha) throw new Error('Branch changed since review: '+branch.name);
+              await github.rest.git.deleteRef({...repo,ref:'heads/'+branch.name});
+              deletedBranches++;
+              core.info('Deleted completed branch: '+branch.name);
+              await pause();
+            }
+            let deletedRuns = 0;
+            for (let round=0; round<4; round++) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{...repo,per_page:100});
+              runs.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+              if (runs.length <= 150) break;
+              const kept = new Set(runs.filter(r=>r.status !== 'completed' || pins.has(r.id)).map(r=>r.id));
+              const families = [...new Set(runs.map(r=>r.workflow_id))];
+              for (const family of families) {
+                for (const outcome of ['success','failure']) {
+                  const candidate = runs.find(r=>r.workflow_id===family && r.conclusion===outcome);
+                  if (candidate) kept.add(candidate.id);
+                }
+              }
+              if (kept.size > 150) throw new Error('More than 150 mandatory evidence runs; refusing cleanup');
+              const add = r => {if(r && kept.size<150) kept.add(r.id);};
+              for (let index=0; index<10; index++) {
+                for (const family of families) add(runs.filter(r=>r.workflow_id===family && r.conclusion==='success')[index]);
+              }
+              for (const r of runs.filter(r=>r.head_branch==='main' && r.conclusion==='success')) add(r);
+              for (const r of runs.filter(r=>r.conclusion==='success')) add(r);
+              for (const r of runs) add(r);
+              const doomed = runs.filter(r=>r.status==='completed' && !kept.has(r.id));
+              core.info('Retention review: '+runs.length+' runs; preserving '+kept.size+'; removing '+doomed.length);
+              for (const run of doomed) {
+                const fresh = (await github.rest.actions.getWorkflowRun({...repo,run_id:run.id})).data;
+                if (fresh.status !== 'completed' || pins.has(run.id) || run.id===context.runId) continue;
+                await github.rest.actions.deleteWorkflowRun({...repo,run_id:run.id});
+                deletedRuns++;
+                await pause();
+              }
+            }
+            const remainingRuns = await github.paginate(github.rest.actions.listWorkflowRunsForRepo,{...repo,per_page:100});
+            const remainingBranches = await github.paginate(github.rest.repos.listBranches,{...repo,per_page:100});
+            const unexpected = remainingBranches.filter(b=>!keptBranches.includes(b.name));
+            if (unexpected.length) throw new Error('Unexpected branches remain; no unreviewed branch will be deleted');
+            if (remainingRuns.length !== 150) throw new Error('Expected 150 workflow runs, found '+remainingRuns.length);
+            await core.summary.addHeading('Robotek repository cleanup')
+            .addTable([
+            [{data:'Check',header:true},{data:'Result',header:true}],
+            ['Branches retained',String(remainingBranches.length)],
+            ['Completed branches removed',String(deletedBranches)],
+            ['Workflow runs retained',String(remainingRuns.length)],
+            ['Obsolete runs removed',String(deletedRuns)],
+            ['Active runs and selected release evidence','Preserved'],
+            ['Scope','iheb-mrabet/robotek-1.2 only']
+            ]).write();
+            core.info('PASS six retained branches and exactly 150 workflow runs');
