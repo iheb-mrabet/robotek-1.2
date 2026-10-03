@@ -62,7 +62,7 @@ Use the live dashboard and latest workflow evidence for the current state. A gre
 | `infra/` | Terraform, bootstrap, runner registration, HTTPS configuration, and verification |
 | `scripts/` | Reusable build, test, security, artifact, and deployment commands |
 | `security/` | Security policies and controlled exception handling |
-| `docs/` | Design decisions, operations, artifact verification, and demonstration instructions |
+| `docs/` | Design decisions, operations, and artifact verification |
 
 ## Build and test locally
 
@@ -145,7 +145,6 @@ The runner is a dedicated systemd service. Its root-owned renewal helper replace
 
 ## Documentation
 
-- [Demo preparation and commands](docs/live-demo-runbook.md)
 - [Runtime image verification](docs/runtime-image-verification.md)
 - [AWS and runner operations](infra/README.md)
 - [Observability design](docs/phase6-design.md)
